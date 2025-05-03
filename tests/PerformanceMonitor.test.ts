@@ -1,6 +1,5 @@
 import { PerformanceMonitor } from '../src/PerformanceMonitor';
 import { PerformanceEntryWithHeaders } from '../src/types';
-import { workerCode } from '../src/worker';
 
 // Mock Service Worker
 const mockServiceWorker = {
@@ -88,7 +87,7 @@ describe('PerformanceMonitor', () => {
   let mockTransform: jest.Mock<PerformanceEntryWithHeaders, [PerformanceEntryWithHeaders]>;
   let mockSubscriber: jest.Mock<void, [PerformanceEntryWithHeaders]>;
   let messageHandler: (event: MessageEvent) => void;
-  const workerUrl = 'https://example.com/worker.js';
+  const workerUrl = '/worker.js';
 
   beforeEach(async () => {
     // Reset mocks
