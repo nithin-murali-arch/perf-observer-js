@@ -81,6 +81,7 @@ self.addEventListener('fetch', (event) => {
           startTime: startTime,
           duration: duration,
           error: error.message,
+          responseHeaders: {}, // Add empty responseHeaders for consistency
           request: {
             type: request.type,
             method: request.method,

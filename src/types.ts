@@ -60,6 +60,7 @@ export type SubscriptionCallback = (entry: PerformanceEntryWithHeaders) => void;
 
 export interface PerformanceMonitorConfig {
   transform?: TransformFunction;
+  workerUrl: string;
 }
 
 export interface Subscription {

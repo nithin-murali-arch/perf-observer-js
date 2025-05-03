@@ -6,18 +6,17 @@ export class PerformanceMonitor {
   private transform: TransformFunction | null = null;
   private worker: ServiceWorker | null = null;
 
-  constructor(config: PerformanceMonitorConfig = {}) {
+  constructor(config: PerformanceMonitorConfig) {
+    if (!config.workerUrl) {
+      throw new Error('workerUrl is required in PerformanceMonitor configuration');
+    }
     this.transform = config.transform || null;
-    this.registerServiceWorker();
+    this.registerServiceWorker(config.workerUrl);
   }
 
-  private async registerServiceWorker(): Promise<void> {
+  private async registerServiceWorker(workerUrl: string): Promise<void> {
     if ('serviceWorker' in navigator) {
       try {
-        // Create a blob URL for the service worker
-        const blob = new Blob([workerCode], { type: 'application/javascript' });
-        const workerUrl = URL.createObjectURL(blob);
-
         // Register the service worker
         const registration = await navigator.serviceWorker.register(workerUrl);
         this.worker = registration.active;
@@ -26,12 +25,11 @@ export class PerformanceMonitor {
         navigator.serviceWorker.addEventListener('message', (event) => {
           if (event.data.type === 'PERFORMANCE_ENTRY') {
             const entry = event.data.entry;
-            this.notifySubscribers(entry);
+            if (entry) {
+              this.notifySubscribers(entry);
+            }
           }
         });
-
-        // Clean up the blob URL
-        URL.revokeObjectURL(workerUrl);
       } catch (error) {
         console.error('Service Worker registration failed:', error);
       }

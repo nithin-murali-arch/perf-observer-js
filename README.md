@@ -1,6 +1,6 @@
 # Performance Observer JS
 
-A lightweight, flexible performance monitoring library for JavaScript applications using Service Workers. This library helps you track and analyze resource loading performance, API calls, and other network requests in real-time.
+A TypeScript library for monitoring web performance metrics using Service Workers.
 
 ## Features
 
@@ -15,68 +15,74 @@ A lightweight, flexible performance monitoring library for JavaScript applicatio
 ## Installation
 
 ```bash
-npm install perf-observer-js
-# or
-yarn add perf-observer-js
+npm install performance-observer-js
 ```
 
-## Quick Start
+## Usage
 
-1. Import and create a PerformanceMonitor instance:
+### Basic Usage
 
-```javascript
-import { PerformanceMonitor } from 'perf-observer-js';
+1. First, copy the `worker.js` file from the `dist` directory to your public assets directory.
 
-// Create a performance monitor instance
-const monitor = new PerformanceMonitor({
-  // Optional: Add a transform function to process entries
-  transform: (entry) => {
-    // Add any custom processing here
-    return entry;
-  }
-});
-```
-
-2. Subscribe to performance entries:
-
-```javascript
-// Subscribe to performance entries
-const subscription = monitor.subscribe((entry) => {
-  console.log('Performance entry:', {
-    url: entry.name,
-    duration: entry.duration,
-    timing: entry.timing,
-    headers: entry.responseHeaders,
-    request: entry.request
-  });
-});
-
-// Clean up when done
-// subscription.unsubscribe();
-// monitor.disconnect();
-```
-
-The PerformanceMonitor class automatically handles:
-- Service Worker registration
-- Message event listening
-- Error handling
-- Data transformation
-- Subscriber management
-
-## Performance Data Structure
-
-The library provides detailed performance entries with the following structure:
+2. Create a monitor instance with the worker URL:
 
 ```typescript
-interface PerformanceEntry {
-  name: string;              // URL of the resource
-  entryType: 'resource';     // Type of entry
-  startTime: number;         // Start timestamp
-  duration: number;          // Total duration
+import { PerformanceMonitor } from 'performance-observer-js';
+
+// Create a monitor instance with the worker URL
+const monitor = new PerformanceMonitor({
+  workerUrl: '/path/to/worker.js' // URL to your service worker file
+});
+
+// Subscribe to performance entries
+const subscription = monitor.subscribe((entry) => {
+  console.log('Performance entry:', entry);
+});
+
+// Unsubscribe when done
+subscription.unsubscribe();
+```
+
+### Configuration Options
+
+The `PerformanceMonitor` constructor requires a configuration object with the following options:
+
+```typescript
+interface PerformanceMonitorConfig {
+  transform?: (entry: PerformanceEntryWithHeaders) => PerformanceEntryWithHeaders;
+  workerUrl: string; // Required URL to the service worker file
+}
+```
+
+#### Serving the Service Worker
+
+The service worker file must be served from your web server:
+
+1. Copy the `worker.js` file from the `dist` directory to your public assets
+2. Serve it from your web server
+3. Configure the monitor with the worker URL:
+
+```typescript
+const monitor = new PerformanceMonitor({
+  workerUrl: '/path/to/worker.js'
+});
+```
+
+### Performance Entry Structure
+
+Each performance entry includes:
+
+```typescript
+interface PerformanceEntryWithHeaders {
+  name: string;              // Resource URL
+  entryType: string;         // Type of entry (e.g., 'resource')
+  startTime: number;         // Start time of the request
+  duration: number;          // Duration of the request
   responseHeaders: {         // Response headers
     [key: string]: string;
   };
-  timing: {                  // Detailed timing data
+  error?: string;           // Error message if request failed
+  timing?: {                // Detailed timing information
     connectStart: number;
     connectEnd: number;
     domainLookupStart: number;
@@ -85,16 +91,49 @@ interface PerformanceEntry {
     requestStart: number;
     responseStart: number;
     responseEnd: number;
-    secureConnectionStart: number;
-    redirectStart: number;
-    redirectEnd: number;
+    secureConnectionStart?: number;
+    redirectStart?: number;
+    redirectEnd?: number;
   } | null;
-  request: {                 // Request information
+  request?: {               // Request information
     method: string;
     type: string;
   };
 }
 ```
+
+### Transform Function
+
+You can transform performance entries before they are passed to subscribers:
+
+```typescript
+const monitor = new PerformanceMonitor({
+  workerUrl: '/path/to/worker.js',
+  transform: (entry) => {
+    // Modify the entry as needed
+    return {
+      ...entry,
+      // Add custom properties
+      customProperty: 'value'
+    };
+  }
+});
+```
+
+### Cleanup
+
+When you're done with the monitor, call `disconnect()` to clean up:
+
+```typescript
+monitor.disconnect();
+```
+
+## Browser Support
+
+- Chrome 60+
+- Firefox 57+
+- Safari 11.1+
+- Edge 79+
 
 ## Examples
 

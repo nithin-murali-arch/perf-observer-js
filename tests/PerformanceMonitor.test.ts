@@ -12,23 +12,9 @@ const mockServiceWorker = {
   addEventListener: jest.fn()
 };
 
-// Mock URL and Blob
-const mockCreateObjectURL = jest.fn().mockReturnValue('blob:mock-url');
-const mockRevokeObjectURL = jest.fn();
-global.URL.createObjectURL = mockCreateObjectURL;
-global.URL.revokeObjectURL = mockRevokeObjectURL;
-
-// Create a proper Blob mock
-class MockBlob {
-  parts: string[];
-  type: string;
-
-  constructor(parts: string[], options?: { type: string }) {
-    this.parts = parts;
-    this.type = options?.type || 'application/javascript';
-  }
-}
-global.Blob = MockBlob as any;
+// Mock btoa
+const mockBtoa = jest.fn().mockReturnValue('base64-encoded-string');
+global.btoa = mockBtoa;
 
 // Mock performance entries with enhanced data
 const mockPerformanceEntry: PerformanceEntryWithHeaders = {
@@ -102,6 +88,7 @@ describe('PerformanceMonitor', () => {
   let mockTransform: jest.Mock<PerformanceEntryWithHeaders, [PerformanceEntryWithHeaders]>;
   let mockSubscriber: jest.Mock<void, [PerformanceEntryWithHeaders]>;
   let messageHandler: (event: MessageEvent) => void;
+  const workerUrl = 'https://example.com/worker.js';
 
   beforeEach(async () => {
     // Reset mocks
@@ -116,6 +103,7 @@ describe('PerformanceMonitor', () => {
     mockTransform = jest.fn((entry: PerformanceEntryWithHeaders) => entry);
     mockSubscriber = jest.fn();
     monitor = new PerformanceMonitor({
+      workerUrl,
       transform: mockTransform
     });
 
@@ -132,24 +120,26 @@ describe('PerformanceMonitor', () => {
   });
 
   describe('constructor', () => {
-    it('should initialize with default config', () => {
-      const defaultMonitor = new PerformanceMonitor();
-      expect(defaultMonitor).toBeDefined();
+    it('should throw error when workerUrl is not provided', () => {
+      expect(() => {
+        new PerformanceMonitor({} as any);
+      }).toThrow('workerUrl is required in PerformanceMonitor configuration');
     });
 
-    it('should register service worker with blob URL', async () => {
-      expect(mockCreateObjectURL).toHaveBeenCalledWith(
-        expect.any(MockBlob)
-      );
-      expect(mockServiceWorker.register).toHaveBeenCalledWith('blob:mock-url');
-      expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+    it('should initialize with required config', () => {
+      const monitor = new PerformanceMonitor({ workerUrl });
+      expect(monitor).toBeDefined();
+    });
+
+    it('should register service worker with provided URL', async () => {
+      expect(mockServiceWorker.register).toHaveBeenCalledWith(workerUrl);
     });
 
     it('should handle service worker registration failure', async () => {
       const consoleError = jest.spyOn(console, 'error').mockImplementation();
       mockServiceWorker.register.mockRejectedValueOnce(new Error('Registration failed'));
 
-      const monitor = new PerformanceMonitor();
+      const monitor = new PerformanceMonitor({ workerUrl });
       await new Promise(resolve => setTimeout(resolve, 0));
 
       expect(consoleError).toHaveBeenCalledWith(
@@ -218,6 +208,7 @@ describe('PerformanceMonitor', () => {
 
       // Create a new monitor with the transform
       const monitor = new PerformanceMonitor({
+        workerUrl,
         transform
       });
 
@@ -248,7 +239,7 @@ describe('PerformanceMonitor', () => {
 
       const consoleError = jest.spyOn(console, 'error').mockImplementation();
 
-      const monitor = new PerformanceMonitor({ transform });
+      const monitor = new PerformanceMonitor({ workerUrl, transform });
       const callback = jest.fn();
       monitor.subscribe(callback);
 
