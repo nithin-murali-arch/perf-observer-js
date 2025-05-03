@@ -1,18 +1,11 @@
 import { PerformanceMonitorConfig, SubscriptionCallback, Subscription } from './types';
 export declare class PerformanceMonitor {
-    private observer;
     private subscribers;
     private transform;
-    private originalXHROpen;
-    private originalXHRSend;
-    private originalFetch;
+    private worker;
     constructor(config?: PerformanceMonitorConfig);
-    private initializeObserver;
-    private processEntry;
-    private isValidEntry;
-    private emitEntry;
-    private interceptXHR;
-    private interceptFetch;
+    private registerServiceWorker;
+    private notifySubscribers;
     subscribe(callback: SubscriptionCallback): Subscription;
     disconnect(): void;
 }

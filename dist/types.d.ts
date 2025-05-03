@@ -1,7 +1,52 @@
-export interface PerformanceEntryWithHeaders extends PerformanceEntry {
-    headers?: Record<string, string>;
-    responseHeaders?: Record<string, string>;
+export interface PerformanceEntryWithHeaders {
+    name: string;
+    entryType: string;
+    startTime: number;
+    duration: number;
+    responseHeaders: Record<string, string>;
     error?: string;
+    timing?: {
+        connectStart: number;
+        connectEnd: number;
+        domainLookupStart: number;
+        domainLookupEnd: number;
+        fetchStart: number;
+        requestStart: number;
+        responseStart: number;
+        responseEnd: number;
+        secureConnectionStart?: number;
+        redirectStart?: number;
+        redirectEnd?: number;
+    } | null;
+    request?: {
+        method: string;
+        type: string;
+    };
+    toJSON(): {
+        name: string;
+        entryType: string;
+        startTime: number;
+        duration: number;
+        responseHeaders: Record<string, string>;
+        error?: string;
+        timing?: {
+            connectStart: number;
+            connectEnd: number;
+            domainLookupStart: number;
+            domainLookupEnd: number;
+            fetchStart: number;
+            requestStart: number;
+            responseStart: number;
+            responseEnd: number;
+            secureConnectionStart?: number;
+            redirectStart?: number;
+            redirectEnd?: number;
+        } | null;
+        request?: {
+            method: string;
+            type: string;
+        };
+    };
 }
 export interface PerformanceObserverOptions {
     entryTypes: string[];
@@ -10,10 +55,6 @@ export interface PerformanceObserverOptions {
 export type TransformFunction = (entry: PerformanceEntryWithHeaders) => PerformanceEntryWithHeaders;
 export type SubscriptionCallback = (entry: PerformanceEntryWithHeaders) => void;
 export interface PerformanceMonitorConfig {
-    resourceTiming?: boolean;
-    navigationTiming?: boolean;
-    xhrTiming?: boolean;
-    fetchTiming?: boolean;
     transform?: TransformFunction;
 }
 export interface Subscription {

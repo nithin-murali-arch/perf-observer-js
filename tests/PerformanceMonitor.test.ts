@@ -1,5 +1,6 @@
 import { PerformanceMonitor } from '../src/PerformanceMonitor';
 import { PerformanceEntryWithHeaders } from '../src/types';
+import { workerCode } from '../src/worker';
 
 // Mock Service Worker
 const mockServiceWorker = {
@@ -10,6 +11,24 @@ const mockServiceWorker = {
   }),
   addEventListener: jest.fn()
 };
+
+// Mock URL and Blob
+const mockCreateObjectURL = jest.fn().mockReturnValue('blob:mock-url');
+const mockRevokeObjectURL = jest.fn();
+global.URL.createObjectURL = mockCreateObjectURL;
+global.URL.revokeObjectURL = mockRevokeObjectURL;
+
+// Create a proper Blob mock
+class MockBlob {
+  parts: string[];
+  type: string;
+
+  constructor(parts: string[], options?: { type: string }) {
+    this.parts = parts;
+    this.type = options?.type || 'application/javascript';
+  }
+}
+global.Blob = MockBlob as any;
 
 // Mock performance entries with enhanced data
 const mockPerformanceEntry: PerformanceEntryWithHeaders = {
@@ -82,8 +101,9 @@ describe('PerformanceMonitor', () => {
   let monitor: PerformanceMonitor;
   let mockTransform: jest.Mock<PerformanceEntryWithHeaders, [PerformanceEntryWithHeaders]>;
   let mockSubscriber: jest.Mock<void, [PerformanceEntryWithHeaders]>;
+  let messageHandler: (event: MessageEvent) => void;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Reset mocks
     jest.clearAllMocks();
 
@@ -98,6 +118,10 @@ describe('PerformanceMonitor', () => {
     monitor = new PerformanceMonitor({
       transform: mockTransform
     });
+
+    // Wait for service worker registration and get message handler
+    await new Promise(resolve => setTimeout(resolve, 0));
+    messageHandler = mockServiceWorker.addEventListener.mock.calls[0][1];
   });
 
   afterEach(() => {
@@ -113,24 +137,39 @@ describe('PerformanceMonitor', () => {
       expect(defaultMonitor).toBeDefined();
     });
 
-    it('should register service worker', async () => {
-      expect(mockServiceWorker.register).toHaveBeenCalledWith('/performance-worker.js');
+    it('should register service worker with blob URL', async () => {
+      expect(mockCreateObjectURL).toHaveBeenCalledWith(
+        expect.any(MockBlob)
+      );
+      expect(mockServiceWorker.register).toHaveBeenCalledWith('blob:mock-url');
+      expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+    });
+
+    it('should handle service worker registration failure', async () => {
+      const consoleError = jest.spyOn(console, 'error').mockImplementation();
+      mockServiceWorker.register.mockRejectedValueOnce(new Error('Registration failed'));
+
+      const monitor = new PerformanceMonitor();
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(consoleError).toHaveBeenCalledWith(
+        'Service Worker registration failed:',
+        expect.any(Error)
+      );
+      consoleError.mockRestore();
     });
   });
 
   describe('service worker integration', () => {
-    it('should process successful performance entries from service worker', () => {
+    it('should process successful performance entries from service worker', async () => {
       const callback = jest.fn();
       monitor.subscribe(callback);
-
-      // Get the message handler
-      const messageHandler = mockServiceWorker.addEventListener.mock.calls[0][1];
 
       // Simulate service worker message with successful request
       messageHandler({
         data: {
           type: 'PERFORMANCE_ENTRY',
-          data: mockPerformanceEntry
+          entry: mockPerformanceEntry
         }
       } as MessageEvent);
 
@@ -149,18 +188,15 @@ describe('PerformanceMonitor', () => {
       }));
     });
 
-    it('should process failed performance entries from service worker', () => {
+    it('should process failed performance entries from service worker', async () => {
       const callback = jest.fn();
       monitor.subscribe(callback);
-
-      // Get the message handler
-      const messageHandler = mockServiceWorker.addEventListener.mock.calls[0][1];
 
       // Simulate service worker message with failed request
       messageHandler({
         data: {
           type: 'PERFORMANCE_ENTRY',
-          data: mockErrorEntry
+          entry: mockErrorEntry
         }
       } as MessageEvent);
 
@@ -185,20 +221,18 @@ describe('PerformanceMonitor', () => {
         transform
       });
 
-      // Wait for service worker registration
+      // Wait for service worker registration and get message handler
       await new Promise(resolve => setTimeout(resolve, 0));
+      const newMessageHandler = mockServiceWorker.addEventListener.mock.calls[1][1];
 
       const callback = jest.fn();
       monitor.subscribe(callback);
 
-      // Get the message handler
-      const messageHandler = mockServiceWorker.addEventListener.mock.calls[mockServiceWorker.addEventListener.mock.calls.length - 1][1];
-
       // Simulate service worker message
-      messageHandler({
+      newMessageHandler({
         data: {
           type: 'PERFORMANCE_ENTRY',
-          data: mockPerformanceEntry
+          entry: mockPerformanceEntry
         }
       } as MessageEvent);
 
@@ -212,25 +246,31 @@ describe('PerformanceMonitor', () => {
         throw error;
       });
 
+      const consoleError = jest.spyOn(console, 'error').mockImplementation();
+
       const monitor = new PerformanceMonitor({ transform });
       const callback = jest.fn();
       monitor.subscribe(callback);
 
-      // Get the message handler
-      const messageHandler = mockServiceWorker.addEventListener.mock.calls[0][1];
+      // Wait for service worker registration and get message handler
+      await new Promise(resolve => setTimeout(resolve, 0));
+      const newMessageHandler = mockServiceWorker.addEventListener.mock.calls[1][1];
 
       // Simulate service worker message
-      messageHandler({
+      newMessageHandler({
         data: {
           type: 'PERFORMANCE_ENTRY',
-          data: mockPerformanceEntry
+          entry: mockPerformanceEntry
         }
       } as MessageEvent);
 
-      // Wait for the next tick to allow error handling to complete
-      await new Promise(resolve => setTimeout(resolve, 0));
-
+      expect(consoleError).toHaveBeenCalledWith(
+        'Error processing performance entry:',
+        error
+      );
       expect(callback).not.toHaveBeenCalled();
+
+      consoleError.mockRestore();
     });
   });
 
@@ -243,20 +283,17 @@ describe('PerformanceMonitor', () => {
       expect(typeof subscription.unsubscribe).toBe('function');
     });
 
-    it('should allow unsubscribing from performance entries', () => {
+    it('should allow unsubscribing from performance entries', async () => {
       const callback = jest.fn();
       const subscription = monitor.subscribe(callback);
 
       subscription.unsubscribe();
 
-      // Get the message handler
-      const messageHandler = mockServiceWorker.addEventListener.mock.calls[0][1];
-
       // Simulate service worker message
       messageHandler({
         data: {
           type: 'PERFORMANCE_ENTRY',
-          data: mockPerformanceEntry
+          entry: mockPerformanceEntry
         }
       } as MessageEvent);
 
@@ -271,19 +308,16 @@ describe('PerformanceMonitor', () => {
   });
 
   describe('disconnect', () => {
-    it('should clear all subscribers', () => {
+    it('should clear all subscribers', async () => {
       const callback = jest.fn();
       monitor.subscribe(callback);
       monitor.disconnect();
-
-      // Get the message handler
-      const messageHandler = mockServiceWorker.addEventListener.mock.calls[0][1];
 
       // Simulate service worker message
       messageHandler({
         data: {
           type: 'PERFORMANCE_ENTRY',
-          data: mockPerformanceEntry
+          entry: mockPerformanceEntry
         }
       } as MessageEvent);
 
