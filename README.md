@@ -1,184 +1,95 @@
 # Performance Observer JS
 
-A TypeScript library for monitoring web performance metrics using Service Workers.
+[![npm version](https://img.shields.io/npm/v/performance-observer-js.svg)](https://www.npmjs.com/package/performance-observer-js)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
+[![Bundle Size](https://img.shields.io/bundlephobia/min/performance-observer-js)](https://bundlephobia.com/package/performance-observer-js)
+
+A lightweight, zero-dependency library for monitoring network performance in web applications. Built with TypeScript, it provides detailed insights into your application's network requests, including timing metrics and response headers.
 
 ## Features
 
-- 🔍 Automatic performance monitoring of all network requests
-- 📊 Detailed timing metrics including DNS, connection, and response times
-- 🔄 Cache-aware performance tracking
-- 🚦 Error handling and failed request monitoring
-- 📡 Real-time performance data broadcasting
-- ⚛️ Framework agnostic (works with React, Vue, Angular, etc.)
-- 🧪 Thoroughly tested with Jest
+- 🔍 **Comprehensive Network Monitoring**: Track all network requests with detailed timing information
+- 📊 **Response Headers**: Access response headers for each request
+- ⚡ **Service Worker Based**: Uses Service Workers for reliable request interception
+- 🔄 **Transform Support**: Customize performance entries with transform functions
+- 🎯 **TypeScript Ready**: Full TypeScript support with type definitions
+- 📦 **Zero Dependencies**: Lightweight and framework-agnostic
+- 🛡️ **Error Handling**: Robust error handling for failed requests
 
 ## Installation
 
 ```bash
 npm install performance-observer-js
+# or
+yarn add performance-observer-js
 ```
 
-## Usage
-
-### Basic Usage
-
-1. First, copy the `worker.js` file from the `dist` directory to your public assets directory.
-
-2. Create a monitor instance with the worker URL:
+## Quick Start
 
 ```typescript
 import { PerformanceMonitor } from 'performance-observer-js';
 
-// Create a monitor instance with the worker URL
+// Initialize the monitor
 const monitor = new PerformanceMonitor({
-  workerUrl: '/path/to/worker.js' // URL to your service worker file
+  workerUrl: '/worker.js'
 });
 
 // Subscribe to performance entries
 const subscription = monitor.subscribe((entry) => {
-  console.log('Performance entry:', entry);
+  console.log('Network request:', entry);
+  // Access timing information
+  console.log('Request duration:', entry.duration);
+  // Access response headers
+  console.log('Response headers:', entry.responseHeaders);
 });
 
-// Unsubscribe when done
+// Cleanup when done
 subscription.unsubscribe();
+// or
+monitor.disconnect();
 ```
 
-### Configuration Options
+## Configuration
 
-The `PerformanceMonitor` constructor requires a configuration object with the following options:
+The `PerformanceMonitor` constructor accepts the following configuration options:
 
 ```typescript
 interface PerformanceMonitorConfig {
-  transform?: (entry: PerformanceEntryWithHeaders) => PerformanceEntryWithHeaders;
-  workerUrl: string; // Required URL to the service worker file
+  workerUrl: string;  // Required: URL to the service worker file
+  transform?: (entry: PerformanceEntryWithHeaders) => PerformanceEntryWithHeaders;  // Optional: Transform function
 }
 ```
 
-#### Serving the Service Worker
-
-The service worker file must be served from your web server. First, copy the worker file from the library to your project's public directory:
-
-```bash
-# Copy the worker file to your public directory
-cp node_modules/performance-observer-js/public/worker.js public/
-```
-
-Then, configure your build tool to serve the worker file:
-
-##### Webpack
-
-```javascript
-// webpack.config.js
-module.exports = {
-  // ... other config
-  plugins: [
-    new CopyWebpackPlugin({
-      patterns: [
-        {
-          from: 'node_modules/performance-observer-js/public/worker.js',
-          to: 'worker.js'
-        }
-      ]
-    })
-  ]
-};
-```
-
-Use the worker in your code:
+### Example with Transform
 
 ```typescript
 const monitor = new PerformanceMonitor({
-  workerUrl: '/worker.js'
-});
-```
-
-##### Vite
-
-```typescript
-// vite.config.ts
-import { defineConfig } from 'vite';
-import { resolve } from 'path';
-
-export default defineConfig({
-  // ... other config
-  publicDir: 'public',
-  build: {
-    rollupOptions: {
-      input: {
-        main: resolve(__dirname, 'index.html'),
-        worker: resolve(__dirname, 'node_modules/performance-observer-js/public/worker.js')
-      }
-    }
+  workerUrl: '/worker.js',
+  transform: (entry) => {
+    // Add custom properties
+    return {
+      ...entry,
+      customMetric: entry.duration * 2
+    };
   }
 });
 ```
 
-Use the worker in your code:
-
-```typescript
-const monitor = new PerformanceMonitor({
-  workerUrl: '/worker.js'
-});
-```
-
-##### Next.js
-
-```javascript
-// next.config.js
-module.exports = {
-  // ... other config
-  async headers() {
-    return [
-      {
-        source: '/worker.js',
-        headers: [
-          {
-            key: 'Service-Worker-Allowed',
-            value: '/'
-          }
-        ]
-      }
-    ];
-  }
-};
-```
-
-Use the worker in your code:
-
-```typescript
-const monitor = new PerformanceMonitor({
-  workerUrl: '/worker.js'
-});
-```
-
-##### Manual Setup
-
-If you're not using a build tool:
-
-1. Copy the worker file from the library to your web server's public directory:
-```bash
-cp node_modules/performance-observer-js/public/worker.js public/
-```
-
-2. Configure your web server to:
-   - Serve the file with the correct MIME type (`application/javascript`)
-   - Allow service worker registration for the worker file
-
-### Performance Entry Structure
+## Performance Entry Structure
 
 Each performance entry includes:
 
 ```typescript
 interface PerformanceEntryWithHeaders {
-  name: string;              // Resource URL
-  entryType: string;         // Type of entry (e.g., 'resource')
-  startTime: number;         // Start time of the request
-  duration: number;          // Duration of the request
+  name: string;              // Request URL
+  entryType: string;         // Always 'resource'
+  startTime: number;         // Request start time
+  duration: number;          // Total request duration
   responseHeaders: {         // Response headers
     [key: string]: string;
   };
-  error?: string;           // Error message if request failed
-  timing?: {                // Detailed timing information
+  timing: {                  // Detailed timing information
     connectStart: number;
     connectEnd: number;
     domainLookupStart: number;
@@ -187,74 +98,95 @@ interface PerformanceEntryWithHeaders {
     requestStart: number;
     responseStart: number;
     responseEnd: number;
-    secureConnectionStart?: number;
-    redirectStart?: number;
-    redirectEnd?: number;
+    secureConnectionStart: number;
+    redirectStart: number;
+    redirectEnd: number;
   } | null;
-  request?: {               // Request information
+  request: {                 // Request details
     method: string;
     type: string;
   };
+  error?: string;            // Error message if request failed
 }
 ```
 
-### Transform Function
+## Setup
 
-You can transform performance entries before they are passed to subscribers:
+### 1. Copy Worker File
 
-```typescript
-const monitor = new PerformanceMonitor({
-  workerUrl: '/path/to/worker.js',
-  transform: (entry) => {
-    // Modify the entry as needed
-    return {
-      ...entry,
-      // Add custom properties
-      customProperty: 'value'
-    };
+First, copy the worker file from the package to your public directory:
+
+```bash
+cp node_modules/performance-observer-js/public/worker.js public/
+```
+
+### 2. Configure Your Build Tool
+
+#### Webpack
+
+```javascript
+// webpack.config.js
+module.exports = {
+  // ... other config
+  output: {
+    publicPath: '/'
   }
-});
+};
 ```
 
-### Cleanup
+#### Vite
 
-When you're done with the monitor, call `disconnect()` to clean up:
-
-```typescript
-monitor.disconnect();
+```javascript
+// vite.config.js
+export default {
+  // ... other config
+  publicDir: 'public'
+};
 ```
+
+#### Next.js
+
+```javascript
+// next.config.js
+module.exports = {
+  // ... other config
+  async rewrites() {
+    return [
+      {
+        source: '/worker.js',
+        destination: '/public/worker.js'
+      }
+    ];
+  }
+};
+```
+
+### 3. Manual Setup
+
+If you're not using a build tool, ensure your web server is configured to serve the worker file from the public directory.
 
 ## Browser Support
 
 - Chrome 60+
-- Firefox 57+
+- Firefox 54+
 - Safari 11.1+
 - Edge 79+
 
-## Examples
-
-Check out the [examples](./examples) directory for more detailed usage scenarios:
-
-- Basic Usage
-- React Integration
-- Error Handling
-- Custom Transformations
-- RUM (Real User Monitoring) Integrations
-
-## Testing
-
-The library includes a comprehensive test suite. Run the tests with:
-
-```bash
-npm test
-# or
-yarn test
-```
-
 ## Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Inspired by the [Performance API](https://developer.mozilla.org/en-US/docs/Web/API/Performance_API)
+- Built with [TypeScript](https://www.typescriptlang.org/)

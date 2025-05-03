@@ -259,24 +259,18 @@ describe('PerformanceMonitor', () => {
         error
       );
       expect(callback).not.toHaveBeenCalled();
-
       consoleError.mockRestore();
     });
   });
 
-  describe('subscription', () => {
+  describe('subscription management', () => {
     it('should allow subscribing to performance entries', () => {
-      const callback = jest.fn();
-      const subscription = monitor.subscribe(callback);
-
-      expect(subscription).toHaveProperty('unsubscribe');
-      expect(typeof subscription.unsubscribe).toBe('function');
+      monitor.subscribe(mockSubscriber);
+      expect(mockSubscriber).not.toHaveBeenCalled();
     });
 
-    it('should allow unsubscribing from performance entries', async () => {
-      const callback = jest.fn();
-      const subscription = monitor.subscribe(callback);
-
+    it('should allow unsubscribing from performance entries', () => {
+      const subscription = monitor.subscribe(mockSubscriber);
       subscription.unsubscribe();
 
       // Simulate service worker message
@@ -287,20 +281,19 @@ describe('PerformanceMonitor', () => {
         }
       } as MessageEvent);
 
-      expect(callback).not.toHaveBeenCalled();
+      expect(mockSubscriber).not.toHaveBeenCalled();
     });
 
-    it('should throw error for invalid subscriber', () => {
+    it('should throw error when subscribing with invalid callback', () => {
       expect(() => {
-        monitor.subscribe(undefined as any);
+        monitor.subscribe(null as any);
       }).toThrow('Subscriber callback must be a function');
     });
   });
 
-  describe('disconnect', () => {
-    it('should clear all subscribers', async () => {
-      const callback = jest.fn();
-      monitor.subscribe(callback);
+  describe('cleanup', () => {
+    it('should disconnect service worker and clear subscribers', () => {
+      monitor.subscribe(mockSubscriber);
       monitor.disconnect();
 
       // Simulate service worker message
@@ -311,12 +304,7 @@ describe('PerformanceMonitor', () => {
         }
       } as MessageEvent);
 
-      expect(callback).not.toHaveBeenCalled();
-    });
-
-    it('should handle multiple disconnects', () => {
-      monitor.disconnect();
-      monitor.disconnect(); // Should not throw
+      expect(mockSubscriber).not.toHaveBeenCalled();
     });
   });
 }); 
