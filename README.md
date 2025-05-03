@@ -56,17 +56,151 @@ interface PerformanceMonitorConfig {
 
 #### Serving the Service Worker
 
-The service worker file must be served from your web server:
+The service worker file must be served from your web server. Here are examples for different build tools and frameworks:
 
-1. Copy the `worker.js` file from the `dist` directory to your public assets
-2. Serve it from your web server
-3. Configure the monitor with the worker URL:
+##### Webpack
+
+1. Copy the `worker.js` file to your `public` directory
+2. Configure webpack to copy the worker file:
+
+```javascript
+// webpack.config.js
+module.exports = {
+  // ... other config
+  plugins: [
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: 'node_modules/performance-observer-js/dist/worker.js',
+          to: 'worker.js'
+        }
+      ]
+    })
+  ]
+};
+```
+
+3. Use the worker in your code:
 
 ```typescript
 const monitor = new PerformanceMonitor({
-  workerUrl: '/path/to/worker.js'
+  workerUrl: '/worker.js'
 });
 ```
+
+##### Vite
+
+1. Copy the `worker.js` file to your `public` directory:
+
+```bash
+cp node_modules/performance-observer-js/dist/worker.js public/
+```
+
+2. Use the worker in your code:
+
+```typescript
+const monitor = new PerformanceMonitor({
+  workerUrl: '/worker.js'
+});
+```
+
+Alternatively, you can use Vite's public directory feature:
+
+```typescript
+// vite.config.ts
+import { defineConfig } from 'vite';
+import { resolve } from 'path';
+
+export default defineConfig({
+  // ... other config
+  publicDir: 'public',
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        worker: resolve(__dirname, 'node_modules/performance-observer-js/dist/worker.js')
+      }
+    }
+  }
+});
+```
+
+##### Next.js
+
+1. Copy the `worker.js` file to your `public` directory:
+
+```bash
+cp node_modules/performance-observer-js/dist/worker.js public/
+```
+
+2. Use the worker in your code:
+
+```typescript
+const monitor = new PerformanceMonitor({
+  workerUrl: '/worker.js'
+});
+```
+
+For Next.js 13+ with app directory, you can also use the `next.config.js`:
+
+```javascript
+// next.config.js
+module.exports = {
+  // ... other config
+  async headers() {
+    return [
+      {
+        source: '/worker.js',
+        headers: [
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/'
+          }
+        ]
+      }
+    ];
+  }
+};
+```
+
+##### Manual Setup
+
+If you're not using a build tool, you can manually copy the worker file:
+
+1. Copy the `worker.js` file from `node_modules/performance-observer-js/dist/` to your web server's public directory
+2. Ensure the file is served with the correct MIME type (`application/javascript`)
+3. Configure your web server to allow service worker registration for the worker file
+
+##### CodeSandbox Setup
+
+When using CodeSandbox, you can serve the worker file in two ways:
+
+1. **Using the Public Directory**:
+   - Create a `public` directory in your CodeSandbox project
+   - Create a new file called `worker.js` in the public directory
+   - Copy the contents of `node_modules/performance-observer-js/dist/worker.js` into this file
+   - Use the worker in your code:
+
+```typescript
+const monitor = new PerformanceMonitor({
+  workerUrl: '/worker.js'
+});
+```
+
+2. **Using a CDN**:
+   - Upload the worker file to a CDN (like jsDelivr or unpkg)
+   - Use the CDN URL in your code:
+
+```typescript
+const monitor = new PerformanceMonitor({
+  workerUrl: 'https://cdn.jsdelivr.net/npm/performance-observer-js@latest/dist/worker.js'
+});
+```
+
+Note: When using CodeSandbox, make sure to:
+- Enable the "Service Workers" feature in your sandbox settings
+- Use HTTPS for the worker URL (CodeSandbox provides this by default)
+- Test in a modern browser that supports Service Workers
 
 ### Performance Entry Structure
 

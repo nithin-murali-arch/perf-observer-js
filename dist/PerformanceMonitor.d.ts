@@ -3,7 +3,7 @@ export declare class PerformanceMonitor {
     private subscribers;
     private transform;
     private worker;
-    constructor(config?: PerformanceMonitorConfig);
+    constructor(config: PerformanceMonitorConfig);
     private registerServiceWorker;
     private notifySubscribers;
     subscribe(callback: SubscriptionCallback): Subscription;

@@ -1,5 +1,4 @@
-// Service worker code as a string
-export const workerCode = `
+// Service Worker for Performance Monitoring
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
@@ -9,15 +8,8 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'PERFORMANCE_ENTRY') {
-    self.clients.matchAll().then(clients => {
-      clients.forEach(client => {
-        client.postMessage({
-          type: 'PERFORMANCE_ENTRY',
-          entry: event.data.entry
-        });
-      });
-    });
+  if (event.data.type === 'DISCONNECT') {
+    self.close();
   }
 });
 
@@ -42,35 +34,40 @@ self.addEventListener('fetch', (event) => {
         const entry = {
           name: request.url,
           entryType: 'resource',
-          startTime: startTime,
-          duration: duration,
-          timing: {
-            fetchStart: startTime,
-            responseEnd: endTime
-          },
+          startTime,
+          duration,
           responseHeaders: headers,
+          timing: {
+            connectStart: startTime,
+            connectEnd: endTime,
+            domainLookupStart: startTime,
+            domainLookupEnd: startTime,
+            fetchStart: startTime,
+            requestStart: startTime,
+            responseStart: endTime,
+            responseEnd: endTime,
+            secureConnectionStart: request.url.startsWith('https:') ? startTime : undefined,
+            redirectStart: 0,
+            redirectEnd: 0
+          },
           request: {
-            type: request.type,
             method: request.method,
-            mode: request.mode,
-            credentials: request.credentials,
-            headers: Object.fromEntries(request.headers)
+            type: request.type || 'fetch'
           }
         };
 
-        // Send to main thread
-        self.clients.matchAll().then(clients => {
-          clients.forEach(client => {
-            client.postMessage({
-              type: 'PERFORMANCE_ENTRY',
-              entry
-            });
+        // Send entry to main thread
+        const clients = await self.clients.matchAll();
+        clients.forEach(client => {
+          client.postMessage({
+            type: 'PERFORMANCE_ENTRY',
+            entry
           });
         });
 
         return response;
       })
-      .catch((error) => {
+      .catch(async (error) => {
         const endTime = performance.now();
         const duration = endTime - startTime;
 
@@ -78,31 +75,27 @@ self.addEventListener('fetch', (event) => {
         const entry = {
           name: request.url,
           entryType: 'resource',
-          startTime: startTime,
-          duration: duration,
+          startTime,
+          duration,
+          responseHeaders: {},
           error: error.message,
-          responseHeaders: {}, // Add empty responseHeaders for consistency
+          timing: null,
           request: {
-            type: request.type,
             method: request.method,
-            mode: request.mode,
-            credentials: request.credentials,
-            headers: Object.fromEntries(request.headers)
+            type: request.type || 'fetch'
           }
         };
 
-        // Send to main thread
-        self.clients.matchAll().then(clients => {
-          clients.forEach(client => {
-            client.postMessage({
-              type: 'PERFORMANCE_ENTRY',
-              entry
-            });
+        // Send error entry to main thread
+        const clients = await self.clients.matchAll();
+        clients.forEach(client => {
+          client.postMessage({
+            type: 'PERFORMANCE_ENTRY',
+            entry
           });
         });
 
         throw error;
       })
   );
-});
-`; 
+}); 

@@ -1,5 +1,4 @@
 import { PerformanceMonitorConfig, PerformanceEntryWithHeaders, SubscriptionCallback, Subscription, TransformFunction } from './types';
-import { workerCode } from './worker';
 
 export class PerformanceMonitor {
   private subscribers: Set<SubscriptionCallback> = new Set();

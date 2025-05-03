@@ -56,6 +56,7 @@ export type TransformFunction = (entry: PerformanceEntryWithHeaders) => Performa
 export type SubscriptionCallback = (entry: PerformanceEntryWithHeaders) => void;
 export interface PerformanceMonitorConfig {
     transform?: TransformFunction;
+    workerUrl: string;
 }
 export interface Subscription {
     unsubscribe: () => void;

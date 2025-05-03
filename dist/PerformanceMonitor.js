@@ -1,21 +1,20 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PerformanceMonitor = void 0;
-const worker_1 = require("./worker");
 class PerformanceMonitor {
-    constructor(config = {}) {
+    constructor(config) {
         this.subscribers = new Set();
         this.transform = null;
         this.worker = null;
+        if (!config.workerUrl) {
+            throw new Error('workerUrl is required in PerformanceMonitor configuration');
+        }
         this.transform = config.transform || null;
-        this.registerServiceWorker();
+        this.registerServiceWorker(config.workerUrl);
     }
-    async registerServiceWorker() {
+    async registerServiceWorker(workerUrl) {
         if ('serviceWorker' in navigator) {
             try {
-                // Create a blob URL for the service worker
-                const blob = new Blob([worker_1.workerCode], { type: 'application/javascript' });
-                const workerUrl = URL.createObjectURL(blob);
                 // Register the service worker
                 const registration = await navigator.serviceWorker.register(workerUrl);
                 this.worker = registration.active;
@@ -23,11 +22,11 @@ class PerformanceMonitor {
                 navigator.serviceWorker.addEventListener('message', (event) => {
                     if (event.data.type === 'PERFORMANCE_ENTRY') {
                         const entry = event.data.entry;
-                        this.notifySubscribers(entry);
+                        if (entry) {
+                            this.notifySubscribers(entry);
+                        }
                     }
                 });
-                // Clean up the blob URL
-                URL.revokeObjectURL(workerUrl);
             }
             catch (error) {
                 console.error('Service Worker registration failed:', error);
