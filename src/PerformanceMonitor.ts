@@ -21,31 +21,98 @@ export class PerformanceMonitor {
   }
 
   private initializeObserver(config: PerformanceMonitorConfig): void {
-    const entryTypes: string[] = [];
-    
-    if (config.resourceTiming) entryTypes.push('resource');
-    if (config.navigationTiming) entryTypes.push('navigation');
+    // Default all config values to false
+    const {
+      resourceTiming = false,
+      navigationTiming = false,
+      xhrTiming = false,
+      fetchTiming = false
+    } = config;
 
-    if (entryTypes.length === 0) return;
+    // Skip initialization if all observers are disabled
+    if (!resourceTiming && !navigationTiming && !xhrTiming && !fetchTiming) {
+      return;
+    }
 
-    this.observer = new PerformanceObserver((list) => {
-      const entries = list.getEntries() as PerformanceEntryWithHeaders[];
-      entries.forEach(entry => this.processEntry(entry));
-    });
+    if (resourceTiming) {
+      this.observer = new PerformanceObserver((list) => {
+        const entries = list.getEntries() as PerformanceEntryWithHeaders[];
+        entries.forEach(entry => this.processEntry(entry));
+      });
+      this.observer.observe({ entryTypes: ['resource'], buffered: true });
+    }
 
-    this.observer.observe({ entryTypes, buffered: true });
+    if (navigationTiming) {
+      const navObserver = new PerformanceObserver((list) => {
+        const entries = list.getEntries() as PerformanceEntryWithHeaders[];
+        entries.forEach(entry => this.processEntry(entry));
+      });
+      navObserver.observe({ entryTypes: ['navigation'], buffered: true });
+    }
+
+    if (xhrTiming) {
+      const xhrObserver = new PerformanceObserver((list) => {
+        const entries = list.getEntries() as PerformanceEntryWithHeaders[];
+        entries.forEach(entry => this.processEntry(entry));
+      });
+      xhrObserver.observe({ entryTypes: ['resource'], buffered: true });
+    }
+
+    if (fetchTiming) {
+      const fetchObserver = new PerformanceObserver((list) => {
+        const entries = list.getEntries() as PerformanceEntryWithHeaders[];
+        entries.forEach(entry => this.processEntry(entry));
+      });
+      fetchObserver.observe({ entryTypes: ['resource'], buffered: true });
+    }
   }
 
   private processEntry(entry: PerformanceEntryWithHeaders): void {
-    let processedEntry = { ...entry };
-    
-    // Apply transform function if exists
-    if (this.transform) {
-      processedEntry = this.transform(processedEntry);
-    }
+    try {
+      if (!this.isValidEntry(entry)) {
+        console.error('Invalid performance entry:', entry);
+        return;
+      }
 
-    // Emit the processed entry to all subscribers
-    this.emitEntry(processedEntry);
+      let processedEntry = entry;
+
+      if (this.transform) {
+        try {
+          processedEntry = this.transform(entry);
+        } catch (error) {
+          console.error('Error in transform function:', error);
+          return;
+        }
+      }
+
+      this.subscribers.forEach(subscriber => {
+        try {
+          subscriber(processedEntry);
+        } catch (error) {
+          console.error('Error in subscriber callback:', error);
+        }
+      });
+    } catch (error) {
+      console.error('Error processing performance entry:', error);
+    }
+  }
+
+  private isValidEntry(entry: any): entry is PerformanceEntryWithHeaders {
+    try {
+      return (
+        entry &&
+        typeof entry === 'object' &&
+        typeof entry.name === 'string' &&
+        typeof entry.entryType === 'string' &&
+        typeof entry.startTime === 'number' &&
+        typeof entry.duration === 'number' &&
+        !isNaN(entry.startTime) &&
+        !isNaN(entry.duration) &&
+        typeof entry.toJSON === 'function'
+      );
+    } catch (error) {
+      return false;
+    }
   }
 
   private emitEntry(entry: PerformanceEntryWithHeaders): void {
@@ -171,6 +238,9 @@ export class PerformanceMonitor {
   }
 
   public subscribe(callback: SubscriptionCallback): Subscription {
+    if (!callback || typeof callback !== 'function') {
+      throw new Error('Subscriber callback must be a function');
+    }
     this.subscribers.add(callback);
     return {
       unsubscribe: () => {

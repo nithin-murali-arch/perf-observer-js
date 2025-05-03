@@ -1,7 +1,7 @@
 {
   "name": "perf-observer-js",
   "version": "1.0.0",
-  "description": "Performance monitoring solution with PerformanceObserver, XHR/fetch integration, and hook system",
+  "description": "A lightweight JavaScript library for comprehensive web performance observability",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "directories": {
@@ -11,40 +11,63 @@
     "build": "tsc",
     "test": "jest",
     "test:watch": "jest --watch",
-    "prepare": "npm run build"
+    "lint-staged": "lint-staged"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nithin-murali-arch/perf-observer-js.git"
   },
   "keywords": [
+    "observability",
     "performance",
     "monitoring",
-    "observer",
+    "metrics",
+    "rum",
+    "apm",
+    "web-performance",
+    "performance-observer",
     "xhr",
     "fetch",
-    "metrics",
-    "web-performance"
+    "headers"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/nithin-murali-arch/perf-observer-js/issues"
   },
   "homepage": "https://github.com/nithin-murali-arch/perf-observer-js#readme",
   "devDependencies": {
-    "@types/jest": "^29.5.12",
-    "@types/node": "^20.11.24",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.1.2",
-    "typescript": "^5.3.3"
+    "@types/jest": "^29.5.0",
+    "@types/node": "^18.15.11",
+    "jest": "^29.5.0",
+    "lint-staged": "^15.5.1",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.0.3"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "npm run build"
+    ]
   },
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
-    "testMatch": ["**/tests/**/*.test.ts"],
+    "testMatch": [
+      "**/tests/**/*.test.ts"
+    ],
     "collectCoverage": true,
     "coverageDirectory": "coverage",
-    "coverageReporters": ["text", "lcov"]
+    "coverageReporters": [
+      "text",
+      "lcov"
+    ],
+    "setupFiles": [
+      "<rootDir>/tests/setup.ts"
+    ],
+    "globals": {
+      "ts-jest": {
+        "tsconfig": "tsconfig.json"
+      }
+    }
   }
 }

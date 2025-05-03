@@ -1,18 +1,31 @@
 import { PerformanceMonitor, PerformanceEntryWithHeaders } from '../src';
 
+// Extend the type to include our custom fields
+type TransformedEntry = PerformanceEntryWithHeaders & {
+  timestamp: number;
+  environment: string;
+  metrics: {
+    totalTime: number;
+    startTime: number;
+    endTime: number;
+    ttfb: number | null;
+  };
+  category: 'api' | 'script' | 'style' | 'other';
+};
+
 // Create a performance monitor with custom transformation
 const monitor = new PerformanceMonitor({
   resourceTiming: true,
   xhrTiming: true,
   fetchTiming: true,
-  transform: (entry: PerformanceEntryWithHeaders) => {
+  transform: (entry: PerformanceEntryWithHeaders): TransformedEntry => {
     // Add custom fields
-    const transformed = {
+    const transformed: TransformedEntry = {
       ...entry,
       // Add timestamp
       timestamp: Date.now(),
       // Add environment
-      environment: process.env.NODE_ENV || 'development',
+      environment: window.location.href.includes('https://www.example.com') ? 'production' : 'development',
       // Add custom metrics
       metrics: {
         totalTime: entry.duration,
@@ -24,25 +37,20 @@ const monitor = new PerformanceMonitor({
           : null
       },
       // Normalize response headers
-      responseHeaders: entry.responseHeaders ? {
-        ...entry.responseHeaders,
-        'content-type': entry.responseHeaders['content-type']?.toLowerCase(),
-        // Remove sensitive headers
-        'set-cookie': undefined,
-        'authorization': undefined
-      } : undefined
+      responseHeaders: entry.responseHeaders ? Object.fromEntries(
+        Object.entries(entry.responseHeaders)
+          .filter(([key]) => !['set-cookie', 'authorization'].includes(key.toLowerCase()))
+          .map(([key, value]) => [
+            key,
+            key === 'content-type' ? value.toLowerCase() : value
+          ])
+      ) : undefined,
+      // Add category
+      category: entry.name.includes('/api/') ? 'api' 
+        : entry.name.endsWith('.js') ? 'script'
+        : entry.name.endsWith('.css') ? 'style'
+        : 'other'
     };
-
-    // Add custom categorization
-    if (entry.name.includes('/api/')) {
-      transformed.category = 'api';
-    } else if (entry.name.endsWith('.js')) {
-      transformed.category = 'script';
-    } else if (entry.name.endsWith('.css')) {
-      transformed.category = 'style';
-    } else {
-      transformed.category = 'other';
-    }
 
     return transformed;
   }
