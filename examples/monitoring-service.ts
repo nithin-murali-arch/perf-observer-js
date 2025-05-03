@@ -1,138 +1,118 @@
-import { PerformanceMonitor, PerformanceEntryWithHeaders } from '../src';
+import { PerformanceMonitor } from 'perf-observer-js';
+import type { PerformanceEntryWithHeaders } from 'perf-observer-js';
 
-// Mock monitoring service
-class MonitoringService {
-  private metrics: any[] = [];
-  private errors: any[] = [];
-
-  trackMetric(metric: any) {
-    this.metrics.push(metric);
-    console.log('Metric tracked:', metric);
-  }
-
-  trackError(error: any) {
-    this.errors.push(error);
-    console.error('Error tracked:', error);
-  }
-
-  getMetrics() {
-    return this.metrics;
-  }
-
-  getErrors() {
-    return this.errors;
-  }
+// Define the monitoring service interface
+interface MonitoringService {
+  track(entry: PerformanceEntryWithHeaders): void;
+  getMetrics(): PerformanceMetrics;
+  reset(): void;
 }
 
-// Create monitoring service instance
-const monitoringService = new MonitoringService();
+interface PerformanceMetrics {
+  totalRequests: number;
+  failedRequests: number;
+  averageDuration: number;
+  slowRequests: number;
+  requestsByType: Record<string, number>;
+  requestsByStatus: Record<string, number>;
+}
 
-// Create performance monitor with monitoring service integration
-const monitor = new PerformanceMonitor({
-  resourceTiming: true,
-  xhrTiming: true,
-  fetchTiming: true,
-  transform: (entry: PerformanceEntryWithHeaders) => {
-    // Add monitoring-specific fields
-    return {
-      ...entry,
-      // Add service name
-      service: 'web-app',
-      // Add environment
-      environment: 'production',
-      // Add timestamp
-      timestamp: Date.now(),
-      // Add custom metrics
-      metrics: {
-        duration: entry.duration,
-        startTime: entry.startTime,
-        endTime: entry.startTime + entry.duration
+// Implementation of the monitoring service
+class PerformanceMonitoringService implements MonitoringService {
+  private metrics: PerformanceMetrics = {
+    totalRequests: 0,
+    failedRequests: 0,
+    averageDuration: 0,
+    slowRequests: 0,
+    requestsByType: {},
+    requestsByStatus: {}
+  };
+
+  private totalDuration: number = 0;
+  private monitor: PerformanceMonitor;
+
+  constructor() {
+    // Create performance monitor instance
+    this.monitor = new PerformanceMonitor({
+      transform: (entry) => {
+        // Add any custom transformations here
+        return entry;
       }
-    };
+    });
+
+    // Subscribe to performance entries
+    this.monitor.subscribe(this.handleEntry.bind(this));
   }
-});
 
-// Subscribe to performance entries
-const subscription = monitor.subscribe((entry) => {
-  try {
-    const transformedEntry = entry as any;
+  private handleEntry(entry: PerformanceEntryWithHeaders): void {
+    // Update metrics
+    this.metrics.totalRequests++;
+    this.totalDuration += entry.duration;
+    this.metrics.averageDuration = this.totalDuration / this.metrics.totalRequests;
 
-    // Track successful requests
-    if (!entry.error) {
-      monitoringService.trackMetric({
-        name: 'request.duration',
-        value: entry.duration,
-        tags: {
-          url: entry.name,
-          type: entry.entryType,
-          service: transformedEntry.service,
-          environment: transformedEntry.environment
-        },
-        timestamp: transformedEntry.timestamp
-      });
+    // Track request types
+    const requestType = entry.request?.type || 'unknown';
+    this.metrics.requestsByType[requestType] = (this.metrics.requestsByType[requestType] || 0) + 1;
 
-      // Track response size if available
-      const contentLength = entry.responseHeaders?.['content-length'];
-      if (contentLength) {
-        monitoringService.trackMetric({
-          name: 'response.size',
-          value: parseInt(contentLength, 10),
-          tags: {
-            url: entry.name,
-            type: entry.entryType,
-            service: transformedEntry.service,
-            environment: transformedEntry.environment
-          },
-          timestamp: transformedEntry.timestamp
-        });
-      }
-      return;
+    // Track status codes
+    const status = entry.responseHeaders['status'] || 'unknown';
+    this.metrics.requestsByStatus[status] = (this.metrics.requestsByStatus[status] || 0) + 1;
+
+    // Track failed requests
+    if (status.startsWith('4') || status.startsWith('5')) {
+      this.metrics.failedRequests++;
     }
 
-    // Track errors
-    monitoringService.trackError({
-      name: 'request.error',
-      message: entry.error,
-      tags: {
-        url: entry.name,
-        type: entry.entryType,
-        service: transformedEntry.service,
-        environment: transformedEntry.environment
-      },
-      timestamp: transformedEntry.timestamp,
-      duration: entry.duration
+    // Track slow requests (over 1 second)
+    if (entry.duration > 1000) {
+      this.metrics.slowRequests++;
+    }
+
+    // Log the entry
+    console.log('Performance Entry:', {
+      url: entry.name,
+      duration: entry.duration,
+      status,
+      type: requestType
     });
-  } catch (error) {
-    console.error('Error processing performance entry:', error);
-  }
-});
-
-// Example: Make some requests to monitor
-async function makeRequests() {
-  // Successful request
-  await fetch('https://api.example.com/data');
-
-  // Failed request
-  try {
-    await fetch('https://api.example.com/error');
-  } catch (error) {
-    console.log('Fetch error caught:', error);
   }
 
-  // Large response
-  await fetch('https://api.example.com/large-data');
+  public track(entry: PerformanceEntryWithHeaders): void {
+    this.handleEntry(entry);
+  }
+
+  public getMetrics(): PerformanceMetrics {
+    return { ...this.metrics };
+  }
+
+  public reset(): void {
+    this.metrics = {
+      totalRequests: 0,
+      failedRequests: 0,
+      averageDuration: 0,
+      slowRequests: 0,
+      requestsByType: {},
+      requestsByStatus: {}
+    };
+    this.totalDuration = 0;
+  }
+
+  public disconnect(): void {
+    this.monitor.disconnect();
+  }
 }
 
-// Run the example
-makeRequests();
+// Example usage
+const monitoringService = new PerformanceMonitoringService();
 
-// Clean up when done
-setTimeout(() => {
-  // Log collected metrics and errors
-  console.log('Collected metrics:', monitoringService.getMetrics());
-  console.log('Collected errors:', monitoringService.getErrors());
+// Example: Get metrics after some time
+setInterval(() => {
+  const metrics = monitoringService.getMetrics();
+  console.log('Current Metrics:', metrics);
+}, 5000);
 
-  // Clean up
-  subscription.unsubscribe();
-  monitor.disconnect();
-}, 5000); 
+// Example: Reset metrics
+// monitoringService.reset();
+
+// Example: Clean up
+// monitoringService.disconnect(); 

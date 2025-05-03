@@ -1,122 +1,79 @@
-import React, { useEffect, useRef } from 'react';
-import { PerformanceMonitor } from '../src';
+import React, { useEffect, useState } from 'react';
+import { PerformanceMonitor } from 'perf-observer-js';
+import type { PerformanceEntryWithHeaders } from 'perf-observer-js';
 
-// Create a custom hook for performance monitoring
-function usePerformanceMonitor(config = {
-  resourceTiming: true,
-  navigationTiming: true,
-  xhrTiming: true,
-  fetchTiming: true
-}) {
-  const monitorRef = useRef<PerformanceMonitor | null>(null);
-  const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
+// Custom hook for performance monitoring
+function usePerformanceMonitor() {
+  const [entries, setEntries] = useState<PerformanceEntryWithHeaders[]>([]);
+  const [monitor, setMonitor] = useState<PerformanceMonitor | null>(null);
 
   useEffect(() => {
-    // Initialize monitor
-    monitorRef.current = new PerformanceMonitor({
-      ...config,
+    // Create monitor instance
+    const performanceMonitor = new PerformanceMonitor({
       transform: (entry) => {
-        // Add React-specific fields
-        return {
-          ...entry,
-          component: 'App', // You can make this dynamic based on your needs
-          timestamp: Date.now()
-        };
+        // Add any custom transformations here
+        return entry;
       }
-    });
-
-    // Subscribe to performance entries
-    subscriptionRef.current = monitorRef.current.subscribe((entry) => {
-      // You could send this to your analytics service
-      console.log('Performance entry:', entry);
-    });
-
-    // Cleanup
-    return () => {
-      if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe();
-      }
-      if (monitorRef.current) {
-        monitorRef.current.disconnect();
-      }
-    };
-  }, [config]);
-
-  return monitorRef.current;
-}
-
-// Example React component
-const App: React.FC = () => {
-  // Initialize performance monitor
-  usePerformanceMonitor();
-
-  // Example API call
-  const fetchData = async () => {
-    try {
-      const response = await fetch('https://api.example.com/data');
-      const data = await response.json();
-      console.log('Data:', data);
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  };
-
-  return (
-    <div>
-      <h1>Performance Monitoring Example</h1>
-      <button onClick={fetchData}>Fetch Data</button>
-    </div>
-  );
-};
-
-// Example of a component that tracks its own performance
-const TrackedComponent: React.FC<{ id: string }> = ({ id }) => {
-  const monitorRef = useRef<PerformanceMonitor | null>(null);
-
-  useEffect(() => {
-    // Create a monitor specific to this component
-    monitorRef.current = new PerformanceMonitor({
-      resourceTiming: true,
-      xhrTiming: true,
-      fetchTiming: true,
-      transform: (entry) => ({
-        ...entry,
-        component: 'TrackedComponent',
-        componentId: id,
-        timestamp: Date.now()
-      })
     });
 
     // Subscribe to entries
-    const subscription = monitorRef.current.subscribe((entry) => {
-      console.log(`Component ${id} performance:`, entry);
+    const subscription = performanceMonitor.subscribe((entry) => {
+      setEntries(prev => [...prev, entry]);
     });
 
+    setMonitor(performanceMonitor);
+
+    // Cleanup
     return () => {
       subscription.unsubscribe();
-      monitorRef.current?.disconnect();
+      performanceMonitor.disconnect();
     };
-  }, [id]);
+  }, []);
+
+  return { entries, monitor };
+}
+
+// Performance data visualization component
+const PerformanceData: React.FC = () => {
+  const { entries } = usePerformanceMonitor();
 
   return (
-    <div>
-      <h2>Tracked Component {id}</h2>
-      <button onClick={() => fetch(`https://api.example.com/component/${id}`)}>
-        Load Component Data
-      </button>
+    <div className="performance-data">
+      <h2>Performance Data</h2>
+      <div className="entries">
+        {entries.map((entry, index) => (
+          <div key={index} className="entry">
+            <h3>{entry.name}</h3>
+            <div className="metrics">
+              <div>Duration: {entry.duration}ms</div>
+              {entry.timing && (
+                <>
+                  <div>DNS Lookup: {entry.timing.domainLookupEnd - entry.timing.domainLookupStart}ms</div>
+                  <div>TCP Connection: {entry.timing.connectEnd - entry.timing.connectStart}ms</div>
+                  <div>Request Time: {entry.timing.responseStart - entry.timing.requestStart}ms</div>
+                  <div>Response Time: {entry.timing.responseEnd - entry.timing.responseStart}ms</div>
+                </>
+              )}
+            </div>
+            <div className="headers">
+              <h4>Response Headers:</h4>
+              <pre>{JSON.stringify(entry.responseHeaders, null, 2)}</pre>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
 
-// Example usage
-const ExampleApp: React.FC = () => {
+// Example usage in a React component
+const App: React.FC = () => {
   return (
-    <div>
-      <App />
-      <TrackedComponent id="1" />
-      <TrackedComponent id="2" />
+    <div className="app">
+      <h1>Performance Monitor Demo</h1>
+      <PerformanceData />
     </div>
   );
 };
 
-export default ExampleApp; 
+export default App; 

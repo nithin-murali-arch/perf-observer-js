@@ -1,71 +1,113 @@
-# Examples
+# Performance Observer JS Examples
 
-This directory contains various examples demonstrating how to use the Performance Observer JS library in different scenarios.
+This directory contains example implementations showing different ways to use the Performance Observer JS library.
 
-## Basic Usage (`basic-usage.ts`)
+## Examples Overview
 
-A simple example showing the core functionality of the library:
-- Creating a performance monitor instance
-- Subscribing to performance entries
-- Monitoring XHR and fetch requests
-- Basic cleanup
+### 1. Basic Usage (`basic-usage.ts`)
+Shows the fundamental setup and usage of the performance monitoring:
+- Service Worker registration
+- Basic performance data collection
+- Simple data logging
 
-## Custom Transformation (`custom-transformation.ts`)
-
-Demonstrates how to use the transform function to:
-- Add custom fields to entries
-- Categorize requests
-- Normalize response headers
-- Add custom metrics
-- Remove sensitive information
-
-## Error Handling (`error-handling.ts`)
-
-Shows how to handle various error scenarios:
-- Failed XHR requests
-- Failed fetch requests
-- Timeout handling
-- Error tracking and reporting
-- Custom error transformation
-
-## Monitoring Service Integration (`monitoring-service.ts`)
-
-Example of integrating with a monitoring service:
-- Custom metrics tracking
-- Error tracking
-- Response size monitoring
-- Environment tagging
-- Service name tracking
-
-## React Integration (`react-integration.tsx`)
-
-Demonstrates how to use the library in a React application:
+### 2. React Integration (`react-integration.tsx`)
+Demonstrates how to integrate the performance monitoring with React applications:
 - Custom hook for performance monitoring
-- Component-level monitoring
-- Cleanup on unmount
-- React-specific transformations
-- Multiple component tracking
+- Performance data visualization component
+- Real-time updates in React components
+
+### 3. Error Handling (`error-handling.ts`)
+Shows how to handle various error scenarios:
+- Failed request monitoring
+- Network error tracking
+- Custom error reporting integration
+
+### 4. Custom Transformations (`custom-transformation.ts`)
+Examples of how to transform and process performance data:
+- Custom data filtering
+- Data aggregation
+- Metric calculations
+
+### 5. Monitoring Service (`monitoring-service.ts`)
+Implementation of a dedicated monitoring service:
+- Centralized performance monitoring
+- Data persistence
+- Analytics integration
+
+### 6. RUM Integrations
+Examples of Real User Monitoring integrations in the `rum-integrations` directory:
+- Google Analytics integration
+- Custom analytics platform integration
+- Performance data aggregation
 
 ## Running the Examples
-
-To run any example:
 
 1. Install dependencies:
 ```bash
 npm install
+# or
+yarn
 ```
 
-2. Run the example:
+2. Start the development server:
 ```bash
-# For TypeScript examples
-ts-node examples/basic-usage.ts
-
-# For React example
-# First, set up a React project and copy the example
-npm start
+npm run dev
+# or
+yarn dev
 ```
 
-Note: The React example requires a React project setup with TypeScript support. You'll need to:
-1. Install React and its type definitions
-2. Configure TypeScript for React
-3. Set up a build system (like Create React App or Vite) 
+3. Open the browser and navigate to the example pages:
+- Basic Usage: http://localhost:3000/basic
+- React Integration: http://localhost:3000/react
+- Error Handling: http://localhost:3000/error
+- Custom Transformations: http://localhost:3000/transform
+- Monitoring Service: http://localhost:3000/monitor
+
+## Example Data Structure
+
+All examples use the following performance entry structure:
+
+```typescript
+interface PerformanceEntry {
+  name: string;              // Resource URL
+  entryType: 'resource';     // Entry type
+  startTime: number;         // Start timestamp
+  duration: number;          // Total duration
+  responseHeaders: {         // Response headers
+    [key: string]: string;
+  };
+  timing: {                  // Detailed timing data
+    connectStart: number;
+    connectEnd: number;
+    domainLookupStart: number;
+    domainLookupEnd: number;
+    fetchStart: number;
+    requestStart: number;
+    responseStart: number;
+    responseEnd: number;
+    secureConnectionStart: number;
+    redirectStart: number;
+    redirectEnd: number;
+  } | null;
+  request: {                 // Request information
+    method: string;
+    type: string;
+  };
+}
+```
+
+## Best Practices
+
+1. **Error Handling**: Always implement proper error handling as shown in `error-handling.ts`
+2. **Data Transformation**: Use custom transformations to process data before consumption
+3. **Performance**: Consider using throttling or debouncing for high-frequency updates
+4. **Memory Management**: Clean up subscriptions and listeners when components unmount
+5. **Security**: Validate and sanitize performance data before processing
+
+## Contributing
+
+Feel free to contribute additional examples by submitting a pull request. Please ensure your examples:
+- Are well documented
+- Follow the existing code style
+- Include proper error handling
+- Are tested and working 

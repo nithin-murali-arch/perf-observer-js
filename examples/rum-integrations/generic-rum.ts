@@ -1,182 +1,146 @@
-import { PerformanceMonitor, PerformanceEntryWithHeaders } from '../../src';
+import { PerformanceMonitor } from 'perf-observer-js';
+import type { PerformanceEntryWithHeaders } from 'perf-observer-js';
 
-// Generic RUM integration that can be adapted for any monitoring service
-class GenericRUMIntegration {
-  private config: {
-    service: string;
-    environment: string;
-    version: string;
-    endpoint: string;
-    apiKey?: string;
+// Generic RUM integration interface
+interface RUMIntegration {
+  track(entry: PerformanceEntryWithHeaders): void;
+  getMetrics(): RUMetrics;
+  reset(): void;
+}
+
+interface RUMetrics {
+  pageLoads: number;
+  resourceCount: number;
+  averageLoadTime: number;
+  slowResources: number;
+  errors: number;
+  resourceTypes: Record<string, number>;
+}
+
+// Generic RUM integration implementation
+class GenericRUMIntegration implements RUMIntegration {
+  private metrics: RUMetrics = {
+    pageLoads: 0,
+    resourceCount: 0,
+    averageLoadTime: 0,
+    slowResources: 0,
+    errors: 0,
+    resourceTypes: {}
   };
 
-  constructor(config: {
-    service: string;
-    environment: string;
-    version: string;
-    endpoint: string;
-    apiKey?: string;
-  }) {
-    this.config = config;
-  }
+  private totalLoadTime: number = 0;
+  private monitor: PerformanceMonitor;
 
-  async trackPerformance(entry: PerformanceEntryWithHeaders) {
-    try {
-      const payload = this.createPayload(entry);
-      await this.sendToRUM(payload);
-    } catch (error) {
-      console.error('Error sending to RUM:', error);
-    }
-  }
-
-  private createPayload(entry: PerformanceEntryWithHeaders) {
-    const basePayload = {
-      // Common fields
-      service: this.config.service,
-      environment: this.config.environment,
-      version: this.config.version,
-      timestamp: Date.now(),
-      
-      // Resource information
-      resource: {
-        name: entry.name,
-        type: entry.entryType,
-        duration: entry.duration,
-        startTime: entry.startTime,
-        // Add response headers (sanitized)
-        headers: this.sanitizeHeaders(entry.responseHeaders)
-      },
-
-      // Browser information
-      browser: {
-        userAgent: navigator.userAgent,
-        language: navigator.language,
-        platform: navigator.platform
-      },
-
-      // Page information
-      page: {
-        url: window.location.href,
-        referrer: document.referrer
+  constructor() {
+    // Create performance monitor instance
+    this.monitor = new PerformanceMonitor({
+      transform: (entry) => {
+        // Add RUM-specific fields
+        return {
+          ...entry,
+          rum: {
+            timestamp: Date.now(),
+            pageUrl: window.location.href,
+            userAgent: navigator.userAgent
+          }
+        };
       }
-    };
-
-    // Add error information if available
-    if (entry.error) {
-      return {
-        ...basePayload,
-        type: 'error',
-        error: {
-          message: entry.error,
-          url: entry.name,
-          duration: entry.duration
-        }
-      };
-    }
-
-    // Add performance metrics
-    return {
-      ...basePayload,
-      type: 'performance',
-      metrics: {
-        duration: entry.duration,
-        startTime: entry.startTime,
-        endTime: entry.startTime + entry.duration,
-        // Add response size if available
-        size: entry.responseHeaders?.['content-length'] 
-          ? parseInt(entry.responseHeaders['content-length'], 10)
-          : undefined
-      }
-    };
-  }
-
-  private async sendToRUM(payload: any) {
-    // In a real implementation, this would send data to your RUM service
-    // This is a mock implementation
-    console.log('Sending to RUM:', {
-      endpoint: this.config.endpoint,
-      payload
     });
 
-    // Example of how you might send to a real RUM service
-    // await fetch(this.config.endpoint, {
-    //   method: 'POST',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //     'Authorization': `Bearer ${this.config.apiKey}`
-    //   },
-    //   body: JSON.stringify(payload)
-    // });
+    // Subscribe to performance entries
+    this.monitor.subscribe(this.handleEntry.bind(this));
   }
 
-  private sanitizeHeaders(headers?: Record<string, string>): Record<string, string> {
-    if (!headers) return {};
-    
-    // Remove sensitive headers
-    const sensitiveHeaders = ['authorization', 'cookie', 'set-cookie'];
-    return Object.entries(headers)
-      .filter(([key]) => !sensitiveHeaders.includes(key.toLowerCase()))
-      .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {});
+  private handleEntry(entry: PerformanceEntryWithHeaders): void {
+    // Update metrics
+    this.metrics.resourceCount++;
+    this.totalLoadTime += entry.duration;
+    this.metrics.averageLoadTime = this.totalLoadTime / this.metrics.resourceCount;
+
+    // Track resource types
+    const resourceType = this.getResourceType(entry.name);
+    this.metrics.resourceTypes[resourceType] = (this.metrics.resourceTypes[resourceType] || 0) + 1;
+
+    // Track slow resources (over 1 second)
+    if (entry.duration > 1000) {
+      this.metrics.slowResources++;
+    }
+
+    // Track errors
+    const status = entry.responseHeaders['status'];
+    if (status && (status.startsWith('4') || status.startsWith('5'))) {
+      this.metrics.errors++;
+    }
+
+    // Log the entry
+    console.log('RUM Entry:', {
+      url: entry.name,
+      type: resourceType,
+      duration: entry.duration,
+      status,
+      rum: (entry as any).rum
+    });
   }
-}
 
-// Create RUM integration
-const rum = new GenericRUMIntegration({
-  service: 'web-app',
-  environment: 'production',
-  version: '1.0.0',
-  endpoint: 'https://rum.example.com/collect',
-  apiKey: 'your-api-key'
-});
+  private getResourceType(url: string): string {
+    const extension = url.split('.').pop()?.toLowerCase();
+    switch (extension) {
+      case 'js':
+        return 'script';
+      case 'css':
+        return 'style';
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+      case 'gif':
+      case 'svg':
+        return 'image';
+      case 'woff':
+      case 'woff2':
+      case 'ttf':
+      case 'eot':
+        return 'font';
+      default:
+        return 'other';
+    }
+  }
 
-// Create performance monitor
-const monitor = new PerformanceMonitor({
-  resourceTiming: true,
-  xhrTiming: true,
-  fetchTiming: true,
-  transform: (entry: PerformanceEntryWithHeaders) => {
-    // Add custom fields
-    return {
-      ...entry,
-      // Add session ID
-      sessionId: crypto.randomUUID(),
-      // Add custom attributes
-      attributes: {
-        environment: 'production',
-        service: 'web-app',
-        version: '1.0.0'
-      }
+  public track(entry: PerformanceEntryWithHeaders): void {
+    this.handleEntry(entry);
+  }
+
+  public getMetrics(): RUMetrics {
+    return { ...this.metrics };
+  }
+
+  public reset(): void {
+    this.metrics = {
+      pageLoads: 0,
+      resourceCount: 0,
+      averageLoadTime: 0,
+      slowResources: 0,
+      errors: 0,
+      resourceTypes: {}
     };
-  }
-});
-
-// Subscribe to performance entries
-const subscription = monitor.subscribe((entry) => {
-  // Send to RUM service
-  rum.trackPerformance(entry);
-});
-
-// Example: Make some requests to monitor
-async function makeRequests() {
-  // Successful request
-  await fetch('https://api.example.com/data');
-
-  // Failed request
-  try {
-    await fetch('https://api.example.com/error');
-  } catch (error) {
-    console.log('Fetch error caught:', error);
+    this.totalLoadTime = 0;
   }
 
-  // Large response
-  await fetch('https://api.example.com/large-data');
+  public disconnect(): void {
+    this.monitor.disconnect();
+  }
 }
 
-// Run the example
-makeRequests();
+// Example usage
+const rumIntegration = new GenericRUMIntegration();
 
-// Clean up when done
-setTimeout(() => {
-  subscription.unsubscribe();
-  monitor.disconnect();
-}, 5000); 
+// Example: Get metrics after some time
+setInterval(() => {
+  const metrics = rumIntegration.getMetrics();
+  console.log('RUM Metrics:', metrics);
+}, 5000);
+
+// Example: Reset metrics
+// rumIntegration.reset();
+
+// Example: Clean up
+// rumIntegration.disconnect(); 

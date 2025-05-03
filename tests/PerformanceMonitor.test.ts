@@ -1,5 +1,82 @@
 import { PerformanceMonitor } from '../src/PerformanceMonitor';
-import { PerformanceEntryWithHeaders, TransformFunction } from '../src/types';
+import { PerformanceEntryWithHeaders } from '../src/types';
+
+// Mock Service Worker
+const mockServiceWorker = {
+  register: jest.fn().mockResolvedValue({
+    active: {
+      postMessage: jest.fn()
+    }
+  }),
+  addEventListener: jest.fn()
+};
+
+// Mock performance entries with enhanced data
+const mockPerformanceEntry: PerformanceEntryWithHeaders = {
+  name: 'https://example.com/resource',
+  entryType: 'resource',
+  startTime: 100,
+  duration: 50,
+  responseHeaders: {
+    'content-type': 'application/json',
+    'content-length': '1000'
+  },
+  timing: {
+    connectStart: 100,
+    connectEnd: 120,
+    domainLookupStart: 90,
+    domainLookupEnd: 95,
+    fetchStart: 80,
+    requestStart: 130,
+    responseStart: 140,
+    responseEnd: 150,
+    secureConnectionStart: 110,
+    redirectStart: 0,
+    redirectEnd: 0
+  },
+  request: {
+    method: 'GET',
+    type: 'fetch'
+  },
+  toJSON: function() {
+    return {
+      name: this.name,
+      entryType: this.entryType,
+      startTime: this.startTime,
+      duration: this.duration,
+      responseHeaders: this.responseHeaders,
+      timing: this.timing,
+      request: this.request
+    };
+  }
+};
+
+// Mock error performance entry
+const mockErrorEntry: PerformanceEntryWithHeaders = {
+  name: 'https://example.com/error',
+  entryType: 'resource',
+  startTime: 100,
+  duration: 30,
+  responseHeaders: {},
+  error: 'Network error',
+  timing: null,
+  request: {
+    method: 'GET',
+    type: 'fetch'
+  },
+  toJSON: function() {
+    return {
+      name: this.name,
+      entryType: this.entryType,
+      startTime: this.startTime,
+      duration: this.duration,
+      responseHeaders: this.responseHeaders,
+      error: this.error,
+      timing: this.timing,
+      request: this.request
+    };
+  }
+};
 
 describe('PerformanceMonitor', () => {
   let monitor: PerformanceMonitor;
@@ -7,14 +84,18 @@ describe('PerformanceMonitor', () => {
   let mockSubscriber: jest.Mock<void, [PerformanceEntryWithHeaders]>;
 
   beforeEach(() => {
+    // Reset mocks
     jest.clearAllMocks();
+
+    // Mock Service Worker
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: mockServiceWorker,
+      writable: true
+    });
+
     mockTransform = jest.fn((entry: PerformanceEntryWithHeaders) => entry);
     mockSubscriber = jest.fn();
     monitor = new PerformanceMonitor({
-      resourceTiming: true,
-      navigationTiming: true,
-      xhrTiming: true,
-      fetchTiming: true,
       transform: mockTransform
     });
   });
@@ -32,350 +113,186 @@ describe('PerformanceMonitor', () => {
       expect(defaultMonitor).toBeDefined();
     });
 
-    it('should initialize with custom config', () => {
-      const customMonitor = new PerformanceMonitor({
-        resourceTiming: true,
-        xhrTiming: true
-      });
-      expect(customMonitor).toBeDefined();
-    });
-
-    it('should initialize performance observers based on config', () => {
-      const observerSpy = jest.spyOn(PerformanceObserver.prototype, 'observe');
-      new PerformanceMonitor({
-        resourceTiming: true,
-        navigationTiming: true,
-        xhrTiming: true,
-        fetchTiming: true
-      });
-
-      expect(observerSpy).toHaveBeenCalledTimes(4);
-    });
-
-    it('should not initialize observers when config is false', () => {
-      jest.clearAllMocks();
-      const observerSpy = jest.spyOn(PerformanceObserver.prototype, 'observe');
-      
-      new PerformanceMonitor({
-        resourceTiming: false,
-        navigationTiming: false,
-        xhrTiming: false,
-        fetchTiming: false
-      });
-
-      expect(observerSpy).not.toHaveBeenCalled();
-      observerSpy.mockRestore();
+    it('should register service worker', async () => {
+      expect(mockServiceWorker.register).toHaveBeenCalledWith('/performance-worker.js');
     });
   });
 
-  describe('transform function', () => {
-    it('should apply transform function to entries', () => {
-      const entry: PerformanceEntryWithHeaders = {
-        name: 'test',
-        entryType: 'resource',
-        startTime: 0,
-        duration: 100,
-        toJSON: () => ({})
-      };
+  describe('service worker integration', () => {
+    it('should process successful performance entries from service worker', () => {
+      const callback = jest.fn();
+      monitor.subscribe(callback);
 
-      monitor['processEntry'](entry);
-      expect(mockTransform).toHaveBeenCalledWith(entry);
+      // Get the message handler
+      const messageHandler = mockServiceWorker.addEventListener.mock.calls[0][1];
+
+      // Simulate service worker message with successful request
+      messageHandler({
+        data: {
+          type: 'PERFORMANCE_ENTRY',
+          data: mockPerformanceEntry
+        }
+      } as MessageEvent);
+
+      expect(callback).toHaveBeenCalledWith(mockPerformanceEntry);
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({
+        timing: expect.objectContaining({
+          connectStart: expect.any(Number),
+          connectEnd: expect.any(Number),
+          domainLookupStart: expect.any(Number),
+          domainLookupEnd: expect.any(Number)
+        }),
+        request: expect.objectContaining({
+          method: expect.any(String),
+          type: expect.any(String)
+        })
+      }));
     });
 
-    it('should emit transformed entries to subscribers', () => {
-      const entry: PerformanceEntryWithHeaders = {
-        name: 'test',
-        entryType: 'resource',
-        startTime: 0,
-        duration: 100,
-        toJSON: () => ({})
-      };
+    it('should process failed performance entries from service worker', () => {
+      const callback = jest.fn();
+      monitor.subscribe(callback);
 
-      const transformedEntry: PerformanceEntryWithHeaders = {
-        ...entry,
-        name: 'transformed'
-      };
+      // Get the message handler
+      const messageHandler = mockServiceWorker.addEventListener.mock.calls[0][1];
 
-      mockTransform.mockReturnValue(transformedEntry);
-      monitor.subscribe(mockSubscriber);
-      monitor['processEntry'](entry);
+      // Simulate service worker message with failed request
+      messageHandler({
+        data: {
+          type: 'PERFORMANCE_ENTRY',
+          data: mockErrorEntry
+        }
+      } as MessageEvent);
 
-      expect(mockTransform).toHaveBeenCalledWith(entry);
-      expect(mockSubscriber).toHaveBeenCalledWith(transformedEntry);
+      expect(callback).toHaveBeenCalledWith(mockErrorEntry);
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({
+        error: expect.any(String),
+        timing: null,
+        responseHeaders: expect.any(Object)
+      }));
     });
 
-    it('should handle transform function errors', () => {
-      const errorTransform = jest.fn().mockImplementation(() => {
-        throw new Error('Transform error');
-      });
-
-      const monitorWithError = new PerformanceMonitor({
-        transform: errorTransform
-      });
-
-      const entry: PerformanceEntryWithHeaders = {
-        name: 'test',
-        entryType: 'resource',
-        startTime: 0,
-        duration: 100,
-        toJSON: () => ({})
+    it('should apply transform to entries', async () => {
+      const transformedEntry = {
+        ...mockPerformanceEntry,
+        transformed: true
       };
 
-      monitorWithError['processEntry'](entry);
-      expect(console.error).toHaveBeenCalledWith('Error in transform function:', expect.any(Error));
+      const transform = jest.fn().mockReturnValue(transformedEntry);
+
+      // Create a new monitor with the transform
+      const monitor = new PerformanceMonitor({
+        transform
+      });
+
+      // Wait for service worker registration
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      const callback = jest.fn();
+      monitor.subscribe(callback);
+
+      // Get the message handler
+      const messageHandler = mockServiceWorker.addEventListener.mock.calls[mockServiceWorker.addEventListener.mock.calls.length - 1][1];
+
+      // Simulate service worker message
+      messageHandler({
+        data: {
+          type: 'PERFORMANCE_ENTRY',
+          data: mockPerformanceEntry
+        }
+      } as MessageEvent);
+
+      expect(transform).toHaveBeenCalledWith(mockPerformanceEntry);
+      expect(callback).toHaveBeenCalledWith(transformedEntry);
     });
 
-    it('should handle null transform result', () => {
-      const nullTransform = jest.fn().mockReturnValue(null);
-      const monitorWithNullTransform = new PerformanceMonitor({
-        transform: nullTransform as any
+    it('should handle transform errors gracefully', async () => {
+      const error = new Error('Transform error');
+      const transform = jest.fn().mockImplementation((entry) => {
+        throw error;
       });
 
-      const entry: PerformanceEntryWithHeaders = {
-        name: 'test',
-        entryType: 'resource',
-        startTime: 0,
-        duration: 100,
-        toJSON: () => ({})
-      };
+      const monitor = new PerformanceMonitor({ transform });
+      const callback = jest.fn();
+      monitor.subscribe(callback);
 
-      monitorWithNullTransform['processEntry'](entry);
-      expect(nullTransform).toHaveBeenCalled();
+      // Get the message handler
+      const messageHandler = mockServiceWorker.addEventListener.mock.calls[0][1];
+
+      // Simulate service worker message
+      messageHandler({
+        data: {
+          type: 'PERFORMANCE_ENTRY',
+          data: mockPerformanceEntry
+        }
+      } as MessageEvent);
+
+      // Wait for the next tick to allow error handling to complete
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(callback).not.toHaveBeenCalled();
     });
   });
 
-  describe('subscription system', () => {
-    it('should add and remove subscribers', () => {
-      const entry: PerformanceEntryWithHeaders = {
-        name: 'test',
-        entryType: 'resource',
-        startTime: 0,
-        duration: 100,
-        toJSON: () => ({})
-      };
+  describe('subscription', () => {
+    it('should allow subscribing to performance entries', () => {
+      const callback = jest.fn();
+      const subscription = monitor.subscribe(callback);
 
-      const subscription = monitor.subscribe(mockSubscriber);
-      monitor['processEntry'](entry);
-      expect(mockSubscriber).toHaveBeenCalledWith(entry);
+      expect(subscription).toHaveProperty('unsubscribe');
+      expect(typeof subscription.unsubscribe).toBe('function');
+    });
 
-      mockSubscriber.mockClear();
+    it('should allow unsubscribing from performance entries', () => {
+      const callback = jest.fn();
+      const subscription = monitor.subscribe(callback);
+
       subscription.unsubscribe();
-      monitor['processEntry'](entry);
-      expect(mockSubscriber).not.toHaveBeenCalled();
+
+      // Get the message handler
+      const messageHandler = mockServiceWorker.addEventListener.mock.calls[0][1];
+
+      // Simulate service worker message
+      messageHandler({
+        data: {
+          type: 'PERFORMANCE_ENTRY',
+          data: mockPerformanceEntry
+        }
+      } as MessageEvent);
+
+      expect(callback).not.toHaveBeenCalled();
     });
 
-    it('should handle subscriber errors', () => {
-      const errorSubscriber = jest.fn().mockImplementation(() => {
-        throw new Error('Test error');
-      });
-
-      const entry: PerformanceEntryWithHeaders = {
-        name: 'test',
-        entryType: 'resource',
-        startTime: 0,
-        duration: 100,
-        toJSON: () => ({})
-      };
-
-      monitor.subscribe(errorSubscriber);
-      monitor['processEntry'](entry);
-
-      expect(errorSubscriber).toHaveBeenCalled();
-      expect(console.error).toHaveBeenCalledWith('Error in subscriber callback:', expect.any(Error));
-    });
-
-    it('should handle multiple subscribers', () => {
-      const subscriber1 = jest.fn();
-      const subscriber2 = jest.fn();
-      const entry: PerformanceEntryWithHeaders = {
-        name: 'test',
-        entryType: 'resource',
-        startTime: 0,
-        duration: 100,
-        toJSON: () => ({})
-      };
-
-      monitor.subscribe(subscriber1);
-      monitor.subscribe(subscriber2);
-      monitor['processEntry'](entry);
-
-      expect(subscriber1).toHaveBeenCalledWith(entry);
-      expect(subscriber2).toHaveBeenCalledWith(entry);
-    });
-
-    it('should handle undefined subscriber', () => {
+    it('should throw error for invalid subscriber', () => {
       expect(() => {
         monitor.subscribe(undefined as any);
-      }).toThrow();
-    });
-
-    it('should handle duplicate subscribers', () => {
-      monitor.subscribe(mockSubscriber);
-      monitor.subscribe(mockSubscriber);
-
-      const entry: PerformanceEntryWithHeaders = {
-        name: 'test',
-        entryType: 'resource',
-        startTime: 0,
-        duration: 100,
-        toJSON: () => ({})
-      };
-
-      monitor['processEntry'](entry);
-      expect(mockSubscriber).toHaveBeenCalledTimes(1);
+      }).toThrow('Subscriber callback must be a function');
     });
   });
 
   describe('disconnect', () => {
     it('should clear all subscribers', () => {
-      const entry: PerformanceEntryWithHeaders = {
-        name: 'test',
-        entryType: 'resource',
-        startTime: 0,
-        duration: 100,
-        toJSON: () => ({})
-      };
-
-      monitor.subscribe(mockSubscriber);
+      const callback = jest.fn();
+      monitor.subscribe(callback);
       monitor.disconnect();
-      monitor['processEntry'](entry);
 
-      expect(mockSubscriber).not.toHaveBeenCalled();
+      // Get the message handler
+      const messageHandler = mockServiceWorker.addEventListener.mock.calls[0][1];
+
+      // Simulate service worker message
+      messageHandler({
+        data: {
+          type: 'PERFORMANCE_ENTRY',
+          data: mockPerformanceEntry
+        }
+      } as MessageEvent);
+
+      expect(callback).not.toHaveBeenCalled();
     });
 
     it('should handle multiple disconnects', () => {
       monitor.disconnect();
       monitor.disconnect(); // Should not throw
-    });
-  });
-
-  describe('header handling', () => {
-    it('should handle XHR response headers', () => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', 'http://test.com');
-      xhr.setRequestHeader('Content-Type', 'application/json');
-      
-      const entry: PerformanceEntryWithHeaders = {
-        name: 'http://test.com',
-        entryType: 'resource',
-        startTime: 0,
-        duration: 100,
-        toJSON: () => ({}),
-        responseHeaders: {
-          'content-type': 'application/json',
-          'x-custom-header': 'test'
-        }
-      };
-
-      monitor['processEntry'](entry);
-      expect(mockTransform).toHaveBeenCalledWith(entry);
-    });
-
-    it('should handle fetch response headers', () => {
-      const entry: PerformanceEntryWithHeaders = {
-        name: 'http://test.com',
-        entryType: 'resource',
-        startTime: 0,
-        duration: 100,
-        toJSON: () => ({}),
-        responseHeaders: {
-          'content-type': 'application/json',
-          'x-custom-header': 'test'
-        }
-      };
-
-      monitor['processEntry'](entry);
-      expect(mockTransform).toHaveBeenCalledWith(entry);
-    });
-
-    it('should handle missing headers', () => {
-      const entry: PerformanceEntryWithHeaders = {
-        name: 'http://test.com',
-        entryType: 'resource',
-        startTime: 0,
-        duration: 100,
-        toJSON: () => ({})
-      };
-
-      monitor['processEntry'](entry);
-      expect(mockTransform).toHaveBeenCalledWith(entry);
-    });
-  });
-
-  describe('error handling', () => {
-    it('should handle invalid entries', () => {
-      const invalidEntry = {
-        name: undefined,
-        entryType: null,
-        startTime: 'invalid',
-        duration: NaN
-      } as unknown as PerformanceEntryWithHeaders;
-      
-      monitor['processEntry'](invalidEntry);
-      expect(console.error).toHaveBeenCalledWith('Invalid performance entry:', expect.anything());
-    });
-
-    it('should handle missing toJSON method', () => {
-      const invalidEntry = {
-        name: 'test',
-        entryType: 'resource',
-        startTime: 0,
-        duration: 100
-      } as PerformanceEntryWithHeaders;
-
-      monitor['processEntry'](invalidEntry);
-      expect(console.error).toHaveBeenCalled();
-    });
-
-    it('should handle invalid entry types', () => {
-      const invalidEntries = [
-        null,
-        undefined,
-        42,
-        'string',
-        true,
-        [],
-        { random: 'object' }
-      ];
-
-      jest.clearAllMocks();
-      
-      invalidEntries.forEach(entry => {
-        monitor['processEntry'](entry as any);
-      });
-
-      expect(console.error).toHaveBeenCalledTimes(invalidEntries.length);
-      expect(console.error).toHaveBeenCalledWith('Invalid performance entry:', expect.anything());
-    });
-  });
-
-  describe('XHR and Fetch interception', () => {
-    it('should intercept XHR requests', () => {
-      const xhr = new XMLHttpRequest();
-      const openSpy = jest.spyOn(xhr, 'open');
-      const sendSpy = jest.spyOn(xhr, 'send');
-
-      xhr.open('GET', 'http://test.com');
-      xhr.send();
-
-      expect(openSpy).toHaveBeenCalled();
-      expect(sendSpy).toHaveBeenCalled();
-    });
-
-    it('should intercept fetch requests', async () => {
-      await fetch('http://test.com');
-      expect(global.fetch).toHaveBeenCalled();
-    });
-
-    it('should handle fetch errors', async () => {
-      const mockFetchError = jest.fn().mockRejectedValue(new Error('Network error'));
-      global.fetch = mockFetchError;
-
-      try {
-        await fetch('http://test.com');
-      } catch (error) {
-        expect(error).toBeDefined();
-      }
     });
   });
 }); 

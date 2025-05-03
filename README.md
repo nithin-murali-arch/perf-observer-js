@@ -1,129 +1,125 @@
 # Performance Observer JS
 
-[![npm version](https://badge.fury.io/js/performance-observer-js.svg)](https://badge.fury.io/js/performance-observer-js)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
+A lightweight, flexible performance monitoring library for JavaScript applications using Service Workers. This library helps you track and analyze resource loading performance, API calls, and other network requests in real-time.
 
-A lightweight, zero-dependency JavaScript library for comprehensive web performance observability. Monitor, transform, and analyze performance metrics with ease.
+## Features
 
-## 🌟 Key Features
+- 🔍 Automatic performance monitoring of all network requests
+- 📊 Detailed timing metrics including DNS, connection, and response times
+- 🔄 Cache-aware performance tracking
+- 🚦 Error handling and failed request monitoring
+- 📡 Real-time performance data broadcasting
+- ⚛️ Framework agnostic (works with React, Vue, Angular, etc.)
+- 🧪 Thoroughly tested with Jest
 
-- **Comprehensive Observability**: Monitor resource timing, XHR, and fetch requests with detailed metrics
-- **Real-time Monitoring**: Subscribe to performance entries as they occur
-- **Data Transformation**: Transform performance data to match your observability needs
-- **Header Capture**: Automatically capture and sanitize response headers
-- **Zero Dependencies**: Lightweight and framework-agnostic
-- **TypeScript Support**: Full type safety with TypeScript definitions
-
-## 🚀 Quick Start
+## Installation
 
 ```bash
-npm install performance-observer-js
+npm install perf-observer-js
+# or
+yarn add perf-observer-js
 ```
 
-### Basic Usage
+## Quick Start
 
-```typescript
-import { PerformanceMonitor } from 'performance-observer-js';
+1. Import and create a PerformanceMonitor instance:
 
+```javascript
+import { PerformanceMonitor } from 'perf-observer-js';
+
+// Create a performance monitor instance
 const monitor = new PerformanceMonitor({
-  resourceTiming: true,
-  xhrTiming: true,
-  fetchTiming: true
+  // Optional: Add a transform function to process entries
+  transform: (entry) => {
+    // Add any custom processing here
+    return entry;
+  }
 });
+```
 
+2. Subscribe to performance entries:
+
+```javascript
 // Subscribe to performance entries
 const subscription = monitor.subscribe((entry) => {
-  console.log('Performance entry:', entry);
+  console.log('Performance entry:', {
+    url: entry.name,
+    duration: entry.duration,
+    timing: entry.timing,
+    headers: entry.responseHeaders,
+    request: entry.request
+  });
 });
 
 // Clean up when done
-subscription.unsubscribe();
-monitor.disconnect();
+// subscription.unsubscribe();
+// monitor.disconnect();
 ```
 
-### Data Transformation
+The PerformanceMonitor class automatically handles:
+- Service Worker registration
+- Message event listening
+- Error handling
+- Data transformation
+- Subscriber management
+
+## Performance Data Structure
+
+The library provides detailed performance entries with the following structure:
 
 ```typescript
-const monitor = new PerformanceMonitor({
-  transform: (entry) => ({
-    ...entry,
-    timestamp: Date.now(),
-    environment: 'production',
-    requestId: entry.responseHeaders?.requestId
-  })
-});
+interface PerformanceEntry {
+  name: string;              // URL of the resource
+  entryType: 'resource';     // Type of entry
+  startTime: number;         // Start timestamp
+  duration: number;          // Total duration
+  responseHeaders: {         // Response headers
+    [key: string]: string;
+  };
+  timing: {                  // Detailed timing data
+    connectStart: number;
+    connectEnd: number;
+    domainLookupStart: number;
+    domainLookupEnd: number;
+    fetchStart: number;
+    requestStart: number;
+    responseStart: number;
+    responseEnd: number;
+    secureConnectionStart: number;
+    redirectStart: number;
+    redirectEnd: number;
+  } | null;
+  request: {                 // Request information
+    method: string;
+    type: string;
+  };
+}
 ```
 
-## 📊 Observability Integration
+## Examples
 
-### New Relic Integration
+Check out the [examples](./examples) directory for more detailed usage scenarios:
 
-```javascript
-import { PerformanceMonitor } from 'performance-observer-js';
+- Basic Usage
+- React Integration
+- Error Handling
+- Custom Transformations
+- RUM (Real User Monitoring) Integrations
 
-const monitor = new PerformanceMonitor({
-  transform: (entry) => ({
-    ...entry,
-    transactionId: window.newrelic?.getBrowserTimingHeader()?.split('"')[1],
-    sessionId: window.newrelic?.getSessionId(),
-    requestId: entry.responseHeaders?.requestId
-  })
-});
+## Testing
 
-monitor.subscribe((entry) => {
-  newrelic.addPageAction('resource_timing', {
-    name: entry.name,
-    duration: entry.duration,
-    ...entry.responseHeaders
-  });
-});
-```
-
-### Datadog Integration
-
-```javascript
-import { PerformanceMonitor } from 'performance-observer-js';
-
-const monitor = new PerformanceMonitor({
-  transform: (entry) => ({
-    ...entry,
-    sessionId: window.DD_RUM?.getSessionId(),
-    viewId: window.DD_RUM?.getViewId(),
-    requestId: entry.responseHeaders?.requestId
-  })
-});
-
-monitor.subscribe((entry) => {
-  datadog.addResource({
-    name: entry.name,
-    duration: entry.duration,
-    ...entry.responseHeaders
-  });
-});
-```
-
-## 🔍 Performance Entry Structure
-
-Each performance entry includes:
-- Resource name and type
-- Duration and timing metrics
-- Response headers (sanitized)
-- Custom transformed fields
-
-## 🛠️ Development
+The library includes a comprehensive test suite. Run the tests with:
 
 ```bash
-# Install dependencies
-npm install
-
-# Run tests
 npm test
-
-# Build
-npm run build
+# or
+yarn test
 ```
 
-## 📝 License
+## Contributing
 
-MIT
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

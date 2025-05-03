@@ -1,47 +1,61 @@
-import { PerformanceMonitor } from '../src';
+// Basic usage example of Performance Observer JS
+import { PerformanceMonitor } from 'perf-observer-js';
+import type { PerformanceEntryWithHeaders } from 'perf-observer-js';
 
-// Create a performance monitor instance with all features enabled
+// Create a performance monitor instance
 const monitor = new PerformanceMonitor({
-  resourceTiming: true,    // Monitor resource timing
-  navigationTiming: true,  // Monitor navigation timing
-  xhrTiming: true,        // Monitor XHR requests
-  fetchTiming: true,      // Monitor fetch requests
+  // Optional: Add a transform function to process entries
+  transform: (entry) => {
+    // Add any custom processing here
+    return entry;
+  }
 });
 
 // Subscribe to performance entries
 const subscription = monitor.subscribe((entry) => {
-  console.log('Performance entry:', {
-    name: entry.name,
-    type: entry.entryType,
+  // Log the performance data
+  console.log('Performance Entry:', {
+    url: entry.name,
     duration: entry.duration,
-    startTime: entry.startTime,
-    // Log response headers if available
-    headers: entry.responseHeaders
+    timing: entry.timing,
+    headers: entry.responseHeaders,
+    request: entry.request
   });
+
+  // Example: Log specific timing metrics
+  if (entry.timing) {
+    const {
+      fetchStart,
+      domainLookupStart,
+      domainLookupEnd,
+      connectStart,
+      connectEnd,
+      requestStart,
+      responseStart,
+      responseEnd
+    } = entry.timing;
+
+    console.log('Detailed Timing:', {
+      dnsLookup: domainLookupEnd - domainLookupStart,
+      tcpConnection: connectEnd - connectStart,
+      requestTime: responseStart - requestStart,
+      responseTime: responseEnd - responseStart,
+      totalTime: responseEnd - fetchStart
+    });
+  }
+
+  // Example: Check for cached responses
+  const cacheControl = entry.responseHeaders['cache-control'];
+  if (cacheControl) {
+    console.log('Cache Status:', cacheControl);
+  }
+
+  // Example: Monitor specific request types
+  if (entry.request?.type === 'fetch' && entry.request?.method === 'POST') {
+    console.log('POST Request Performance:', entry.duration);
+  }
 });
 
-// Example: Make some requests to monitor
-async function makeRequests() {
-  // XHR request
-  const xhr = new XMLHttpRequest();
-  xhr.open('GET', 'https://api.example.com/data');
-  xhr.send();
-
-  // Fetch request
-  try {
-    const response = await fetch('https://api.example.com/data');
-    const data = await response.json();
-    console.log('Fetch response:', data);
-  } catch (error) {
-    console.error('Fetch error:', error);
-  }
-}
-
-// Run the example
-makeRequests();
-
-// Clean up when done
-setTimeout(() => {
-  subscription.unsubscribe();
-  monitor.disconnect();
-}, 5000); 
+// Example: Clean up when done
+// subscription.unsubscribe();
+// monitor.disconnect(); 

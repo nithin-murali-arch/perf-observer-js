@@ -1,71 +1,90 @@
-import { PerformanceMonitor, PerformanceEntryWithHeaders } from '../src';
+import { PerformanceMonitor } from 'perf-observer-js';
+import type { PerformanceEntryWithHeaders } from 'perf-observer-js';
 
-// Extend the type to include our custom fields
-type TransformedEntry = PerformanceEntryWithHeaders & {
-  timestamp: number;
-  environment: string;
-  metrics: {
-    totalTime: number;
-    startTime: number;
-    endTime: number;
-    ttfb: number | null;
-  };
-  category: 'api' | 'script' | 'style' | 'other';
+// Example transform functions
+const addCustomMetrics = (entry: PerformanceEntryWithHeaders) => {
+  if (entry.timing) {
+    const {
+      fetchStart,
+      domainLookupStart,
+      domainLookupEnd,
+      connectStart,
+      connectEnd,
+      requestStart,
+      responseStart,
+      responseEnd
+    } = entry.timing;
+
+    return {
+      ...entry,
+      customMetrics: {
+        dnsLookup: domainLookupEnd - domainLookupStart,
+        tcpConnection: connectEnd - connectStart,
+        requestTime: responseStart - requestStart,
+        responseTime: responseEnd - responseStart,
+        totalTime: responseEnd - fetchStart
+      }
+    };
+  }
+  return entry;
 };
 
-// Create a performance monitor with custom transformation
-const monitor = new PerformanceMonitor({
-  resourceTiming: true,
-  xhrTiming: true,
-  fetchTiming: true,
-  transform: (entry: PerformanceEntryWithHeaders): TransformedEntry => {
-    // Add custom fields
-    const transformed: TransformedEntry = {
-      ...entry,
-      // Add timestamp
-      timestamp: Date.now(),
-      // Add environment
-      environment: window.location.href.includes('https://www.example.com') ? 'production' : 'development',
-      // Add custom metrics
-      metrics: {
-        totalTime: entry.duration,
-        startTime: entry.startTime,
-        endTime: entry.startTime + entry.duration,
-        // Calculate time to first byte (if available)
-        ttfb: entry.responseHeaders?.['server-timing'] 
-          ? parseFloat(entry.responseHeaders['server-timing'].split(';')[0])
-          : null
-      },
-      // Normalize response headers
-      responseHeaders: entry.responseHeaders ? Object.fromEntries(
-        Object.entries(entry.responseHeaders)
-          .filter(([key]) => !['set-cookie', 'authorization'].includes(key.toLowerCase()))
-          .map(([key, value]) => [
-            key,
-            key === 'content-type' ? value.toLowerCase() : value
-          ])
-      ) : undefined,
-      // Add category
-      category: entry.name.includes('/api/') ? 'api' 
-        : entry.name.endsWith('.js') ? 'script'
-        : entry.name.endsWith('.css') ? 'style'
-        : 'other'
-    };
+const categorizeRequests = (entry: PerformanceEntryWithHeaders) => {
+  const url = new URL(entry.name);
+  const path = url.pathname;
+  
+  let category = 'other';
+  if (path.startsWith('/api/')) {
+    category = 'api';
+  } else if (path.match(/\.(js|css|png|jpg|gif)$/)) {
+    category = 'static';
+  } else if (path.startsWith('/assets/')) {
+    category = 'assets';
+  }
 
+  return {
+    ...entry,
+    category
+  };
+};
+
+const normalizeHeaders = (entry: PerformanceEntryWithHeaders) => {
+  const normalizedHeaders: Record<string, string> = {};
+  
+  Object.entries(entry.responseHeaders).forEach(([key, value]) => {
+    normalizedHeaders[key.toLowerCase()] = value;
+  });
+
+  return {
+    ...entry,
+    responseHeaders: normalizedHeaders
+  };
+};
+
+// Create a performance monitor with multiple transformations
+const monitor = new PerformanceMonitor({
+  transform: (entry) => {
+    // Apply transformations in sequence
+    let transformed = addCustomMetrics(entry);
+    transformed = categorizeRequests(transformed);
+    transformed = normalizeHeaders(transformed);
     return transformed;
   }
 });
 
 // Subscribe to transformed entries
 const subscription = monitor.subscribe((entry) => {
-  console.log('Transformed entry:', {
-    name: entry.name,
+  console.log('Transformed Performance Entry:', {
+    url: entry.name,
     category: (entry as any).category,
-    environment: (entry as any).environment,
-    metrics: (entry as any).metrics,
-    headers: entry.responseHeaders
+    customMetrics: (entry as any).customMetrics,
+    normalizedHeaders: entry.responseHeaders
   });
 });
+
+// Example: Clean up when done
+// subscription.unsubscribe();
+// monitor.disconnect();
 
 // Example: Make some requests to monitor
 async function makeRequests() {

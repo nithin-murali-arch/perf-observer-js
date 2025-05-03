@@ -1,20 +1,25 @@
-import { PerformanceMonitor } from '../src';
+import { PerformanceMonitor } from 'perf-observer-js';
+import type { PerformanceEntryWithHeaders } from 'perf-observer-js';
 
-// Create a performance monitor instance
+// Define the type for our transformed entry
+interface ErrorDetails {
+  type: string;
+  message: string;
+  timestamp: number;
+}
+
+type ErrorEntry = Omit<PerformanceEntryWithHeaders, 'error'> & {
+  error?: ErrorDetails;
+};
+
+// Create a performance monitor with error handling
 const monitor = new PerformanceMonitor({
-  resourceTiming: true,
-  xhrTiming: true,
-  fetchTiming: true,
-  transform: (entry) => {
-    // Add error information if available
-    if (entry.error) {
+  transform: (entry: PerformanceEntryWithHeaders): PerformanceEntryWithHeaders => {
+    // Add error information if the request failed
+    if (!entry.timing || entry.duration === 0) {
       return {
         ...entry,
-        errorDetails: {
-          message: entry.error,
-          timestamp: Date.now(),
-          url: entry.name
-        }
+        error: 'Request failed or timed out'
       };
     }
     return entry;
@@ -24,35 +29,51 @@ const monitor = new PerformanceMonitor({
 // Subscribe to performance entries with error handling
 const subscription = monitor.subscribe((entry) => {
   try {
-    // Log successful entries
-    if (!entry.error) {
-      console.log('Successful request:', {
+    // Check for errors
+    if ('error' in entry) {
+      console.error('Failed Request:', {
         url: entry.name,
-        duration: entry.duration,
+        error: (entry as ErrorEntry).error,
         headers: entry.responseHeaders
       });
       return;
     }
 
-    // Log error entries
-    console.error('Failed request:', {
+    // Log successful requests
+    console.log('Successful Request:', {
       url: entry.name,
-      error: entry.error,
       duration: entry.duration,
-      // Additional error details from transform
-      details: (entry as any).errorDetails
+      timing: entry.timing,
+      headers: entry.responseHeaders
     });
 
-    // You could send errors to your error tracking service here
-    // errorTrackingService.captureError(entry.error, {
-    //   url: entry.name,
-    //   duration: entry.duration,
-    //   headers: entry.responseHeaders
-    // });
+    // Example: Check for slow requests
+    if (entry.duration > 1000) { // 1 second threshold
+      console.warn('Slow Request:', {
+        url: entry.name,
+        duration: entry.duration,
+        timing: entry.timing
+      });
+    }
+
+    // Example: Check for specific error status codes
+    const statusCode = entry.responseHeaders['status'];
+    if (statusCode && parseInt(statusCode) >= 400) {
+      console.error('Error Status Code:', {
+        url: entry.name,
+        status: statusCode,
+        headers: entry.responseHeaders
+      });
+    }
+
   } catch (error) {
     console.error('Error processing performance entry:', error);
   }
 });
+
+// Example: Clean up when done
+// subscription.unsubscribe();
+// monitor.disconnect();
 
 // Example: Make some requests that might fail
 async function makeRequests() {
