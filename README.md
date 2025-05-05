@@ -1,9 +1,11 @@
 # Performance Observer JS
 
-[![npm version](https://img.shields.io/npm/v/performance-observer-js.svg)](https://www.npmjs.com/package/performance-observer-js)
+[![npm version](https://img.shields.io/npm/v/perf-observer-js.svg)](https://www.npmjs.com/package/perf-observer-js)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
-[![Bundle Size](https://img.shields.io/bundlephobia/min/performance-observer-js)](https://bundlephobia.com/package/performance-observer-js)
+[![Bundle Size](https://img.shields.io/bundlephobia/minzip/perf-observer-js)](https://bundlephobia.com/package/perf-observer-js)
+[![Tests](https://github.com/nithin-murali-arch/perf-observer-js/actions/workflows/test.yml/badge.svg)](https://github.com/nithin-murali-arch/perf-observer-js/actions/workflows/test.yml)
+[![Downloads](https://img.shields.io/npm/dm/perf-observer-js.svg)](https://www.npmjs.com/package/perf-observer-js)
+[![GitHub stars](https://img.shields.io/github/stars/nithin-murali-arch/perf-observer-js.svg)](https://github.com/nithin-murali-arch/perf-observer-js/stargazers)
 
 A lightweight, zero-dependency library for monitoring network performance in web applications. Built with TypeScript, it provides detailed insights into your application's network requests, including timing metrics and response headers.
 
