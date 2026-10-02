@@ -17,8 +17,16 @@
     "service-worker",
     "metrics"
   ],
-  "author": "",
+  "author": "Nithin Murali <nithintecharch@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nithin-murali-arch/perf-observer-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nithin-murali-arch/perf-observer-js/issues"
+  },
+  "homepage": "https://github.com/nithin-murali-arch/perf-observer-js#readme",
   "devDependencies": {
     "@types/jest": "^29.5.12",
     "@types/serviceworker": "^0.0.133",
