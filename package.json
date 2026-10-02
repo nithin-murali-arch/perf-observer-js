@@ -1,6 +1,6 @@
 {
   "name": "perf-observer-js",
-  "version": "2.2.3",
+  "version": "2.2.4",
   "description": "A library for monitoring performance metrics using Service Workers",
   "main": "dist/PerformanceMonitor.js",
   "types": "dist/PerformanceMonitor.d.ts",
