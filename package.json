@@ -26,7 +26,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nithin-murali-arch/perf-observer-js.git"
+    "url": "https://github.com/nithin-murali-arch/perf-observer-js"
   },
   "bugs": {
     "url": "https://github.com/nithin-murali-arch/perf-observer-js/issues"
