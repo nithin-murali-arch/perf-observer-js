@@ -7,7 +7,7 @@ class MockPerformanceObserver {
     this.callback = callback;
   }
 
-  observe(options: { entryTypes: string[], buffered?: boolean }) {
+  observe(_options: { entryTypes: string[], buffered?: boolean }) {
     this.isObserving = true;
     // Simulate an initial callback with empty entries
     const mockEntryList = {
@@ -54,7 +54,7 @@ class MockXMLHttpRequest {
   private headers: { [key: string]: string } = {};
   private listeners: { [key: string]: Function[] } = {};
 
-  open(method: string, url: string) {}
+  open(_method: string, _url: string) {}
   
   send() {
     // Simulate a successful load event

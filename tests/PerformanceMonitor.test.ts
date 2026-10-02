@@ -138,7 +138,7 @@ describe('PerformanceMonitor', () => {
       const consoleError = jest.spyOn(console, 'error').mockImplementation();
       mockServiceWorker.register.mockRejectedValueOnce(new Error('Registration failed'));
 
-      const monitor = new PerformanceMonitor({ workerUrl });
+      new PerformanceMonitor({ workerUrl });
       await new Promise(resolve => setTimeout(resolve, 0));
 
       expect(consoleError).toHaveBeenCalledWith(
@@ -232,7 +232,7 @@ describe('PerformanceMonitor', () => {
 
     it('should handle transform errors gracefully', async () => {
       const error = new Error('Transform error');
-      const transform = jest.fn().mockImplementation((entry) => {
+      const transform = jest.fn().mockImplementation((_entry) => {
         throw error;
       });
 
