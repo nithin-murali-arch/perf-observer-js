@@ -1,13 +1,21 @@
-# Performance Observer JS
+# perf-observer-js
 
+Monitor network requests in web apps with Service Worker timing and response headers.
+
+[![CI](https://github.com/nithin-murali-arch/perf-observer-js/actions/workflows/test.yml/badge.svg)](https://github.com/nithin-murali-arch/perf-observer-js/actions/workflows/test.yml)
 [![npm version](https://img.shields.io/npm/v/perf-observer-js.svg)](https://www.npmjs.com/package/perf-observer-js)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Bundle Size](https://img.shields.io/bundlephobia/minzip/perf-observer-js)](https://bundlephobia.com/package/perf-observer-js)
-[![Tests](https://github.com/nithin-murali-arch/perf-observer-js/actions/workflows/test.yml/badge.svg)](https://github.com/nithin-murali-arch/perf-observer-js/actions/workflows/test.yml)
-[![Downloads](https://img.shields.io/npm/dm/perf-observer-js.svg)](https://www.npmjs.com/package/perf-observer-js)
-[![GitHub stars](https://img.shields.io/github/stars/nithin-murali-arch/perf-observer-js.svg)](https://github.com/nithin-murali-arch/perf-observer-js/stargazers)
 
-A lightweight, zero-dependency library for monitoring network performance in web applications. Built with TypeScript, it provides detailed insights into your application's network requests, including timing metrics and response headers.
+```bash
+npm install perf-observer-js
+```
+
+```typescript
+import { PerformanceMonitor } from 'perf-observer-js';
+const monitor = new PerformanceMonitor({ workerUrl: '/worker.js' });
+monitor.subscribe((entry) => {
+  console.log(entry.name, entry.duration, entry.responseHeaders);
+});
+```
 
 ## Features
 

@@ -1,7 +1,7 @@
 {
   "name": "perf-observer-js",
   "version": "2.2.4",
-  "description": "A library for monitoring performance metrics using Service Workers",
+  "description": "Network performance monitoring for web apps. Service Worker timing plus response headers.",
   "main": "dist/PerformanceMonitor.js",
   "types": "dist/PerformanceMonitor.d.ts",
   "scripts": {
@@ -15,7 +15,12 @@
     "performance",
     "monitoring",
     "service-worker",
-    "metrics"
+    "metrics",
+    "web-performance",
+    "network-monitoring",
+    "resource-timing",
+    "response-headers",
+    "typescript"
   ],
   "author": "Nithin Murali <nithintecharch@gmail.com>",
   "license": "MIT",
