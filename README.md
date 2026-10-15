@@ -30,9 +30,9 @@ const subscription = monitor.subscribe((entry) => {
   console.log(entry.name, entry.duration, entry.responseHeaders);
 });
 
-// Stop receiving entries
+// Stop one subscriber
 subscription.unsubscribe();
-// or remove every subscriber
+// or stop the monitor: removes every subscriber and the page's message listener
 monitor.disconnect();
 ```
 
@@ -40,7 +40,7 @@ Create the monitor in the browser only. The constructor registers the service wo
 
 ## What it measures
 
-The worker file runs a `fetch` handler. For each request it intercepts, the handler re-issues the request with `fetch()`, notes the time before and after, and posts one entry to the pages it controls.
+The worker file runs a `fetch` handler. For each request it intercepts, the handler re-issues the request with `fetch()`, notes the time before and after, and posts one entry to the page that made the request.
 
 | Field | Value |
 | --- | --- |
@@ -56,7 +56,7 @@ HTTP error statuses such as 404 or 500 are not errors here, because `fetch()` re
 
 The `timing` sub-fields are coarse placeholders, not measurements. The worker copies the start time into `connectStart`, `domainLookupStart`, `domainLookupEnd`, `fetchStart` and `requestStart`, and the end time into `connectEnd`, `responseStart` and `responseEnd`. `secureConnectionStart` is the start time for `https:` URLs and `undefined` otherwise. `redirectStart` and `redirectEnd` are always `0`. The package cannot give you DNS, connection or TLS durations. Use the Resource Timing API for those.
 
-With several tabs open, the worker posts each entry to every page it controls. A subscriber in one tab receives the requests of all controlled tabs.
+The worker posts each entry only to the page that made the request. A subscriber in one tab does not see the requests of other tabs. Requests made before the service worker controls the page, such as those during the first page load after install, are not reported.
 
 ## API
 
@@ -88,7 +88,7 @@ Adds `callback` and returns `{ unsubscribe }`. Throws if `callback` is not a fun
 
 ### `monitor.disconnect()`
 
-Removes all subscribers and sends the worker a `DISCONNECT` message.
+Removes all subscribers and stops the monitor from listening to the worker. `disconnect()` is terminal for that instance. Create a new `PerformanceMonitor` to start again. The worker keeps running and keeps handling requests.
 
 ### `PerformanceEntryWithHeaders`
 
