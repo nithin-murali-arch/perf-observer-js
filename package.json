@@ -1,7 +1,7 @@
 {
   "name": "perf-observer-js",
-  "version": "2.2.4",
-  "description": "Network performance monitoring for web apps. Service Worker timing plus response headers.",
+  "version": "2.2.5",
+  "description": "Service worker monitor for network requests in web apps. Reports duration and response headers. Does not measure Web Vitals.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -20,14 +20,18 @@
     "prepare": "npm run build"
   },
   "keywords": [
-    "performance",
-    "monitoring",
     "service-worker",
-    "metrics",
-    "web-performance",
     "network-monitoring",
-    "resource-timing",
+    "network-requests",
+    "fetch",
+    "fetch-timing",
+    "request-duration",
     "response-headers",
+    "http-headers",
+    "performance-monitoring",
+    "web-performance",
+    "real-user-monitoring",
+    "rum",
     "typescript"
   ],
   "author": "Nithin Murali <nithintecharch@gmail.com>",
