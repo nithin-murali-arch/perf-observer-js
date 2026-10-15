@@ -7,9 +7,9 @@
 [![types](https://img.shields.io/npm/types/perf-observer-js)](https://www.npmjs.com/package/perf-observer-js)
 [![minified + gzip size](https://img.shields.io/bundlejs/size/perf-observer-js)](https://bundlejs.com/?q=perf-observer-js)
 
-`perf-observer-js` is a service worker based monitor for network requests in web apps. It reports the URL, method, duration and response headers of each request the service worker intercepts through one `subscribe` callback. It does not use `PerformanceObserver` and it does not measure Web Vitals (LCP, INP, CLS, FCP, TTFB). Use [`web-vitals`](https://www.npmjs.com/package/web-vitals) for those.
+`perf-observer-js` is a service worker based monitor for network requests in web apps. It reports the URL, method, duration, status, and response headers of each request the service worker intercepts through one `subscribe` callback. It does not use `PerformanceObserver` and it does not measure Web Vitals (LCP, INP, CLS, FCP, TTFB). Use [`web-vitals`](https://www.npmjs.com/package/web-vitals) for those.
 
-It has no dependencies. Unminified, the client code is 3.1 kB (1,034 bytes gzipped) and the worker file is 2.7 kB (768 bytes gzipped).
+It has no runtime dependencies.
 
 ## Install
 
@@ -57,7 +57,7 @@ The worker file runs a `fetch` handler. For each request it intercepts, the hand
 | `responseHeaders` | Response headers. For cross-origin requests the browser exposes only CORS-safelisted headers and those listed in `Access-Control-Expose-Headers`. |
 | `error` | The error message when `fetch()` rejects. The entry then has empty `responseHeaders` and `timing: null`. |
 
-HTTP error statuses such as 404 or 500 are not errors here, because `fetch()` resolves for them. Read `entry.status` to detect them. `error` identifies rejected fetches, while status `0` alone can also mean an opaque response.
+HTTP error statuses such as 404 or 500 are not errors here, because `fetch()` resolves for them. Read `entry.status` to detect them. Deploy the matching updated `worker.js` when upgrading the client package. Older copied workers do not send the required `status` field. `error` identifies rejected fetches, while status `0` alone can also mean an opaque response.
 
 The `timing` sub-fields are coarse placeholders, not measurements. The worker copies the start time into `connectStart`, `domainLookupStart`, `domainLookupEnd`, `fetchStart` and `requestStart`, and the end time into `connectEnd`, `responseStart` and `responseEnd`. `secureConnectionStart` is the start time for `https:` URLs and `undefined` otherwise. `redirectStart` and `redirectEnd` are always `0`. The package cannot give you DNS, connection or TLS durations. Use the Resource Timing API for those.
 
@@ -384,6 +384,56 @@ document.addEventListener('visibilitychange', () => {
 ```
 
 The `entry.name === endpoint` check stops the recipe from reporting its own beacon. `sendBeacon` sends the string with a `text/plain;charset=UTF-8` content type, so parse the body as JSON on your server.
+
+### Show slow API calls during QA
+
+Copy [the overlay module](examples/slow-request-overlay/overlay.ts) into your browser app and call `showSlowRequests(500)` after the body exists. It lists the last 20 requests over the threshold and their `x-request-id` header when visible. Call the returned cleanup function to remove the panel and disconnect the monitor.
+
+Run the verified consumer from this repository with `npm run verify`. It installs `npm pack` output, type-checks all examples, builds the page, and checks delayed requests in Chrome. To explore the page, run `npm run dev` in `examples/network-recipes` after verification. Click the button to request the local delayed route.
+
+### Count CDN cache hits by path
+
+Use [cacheResult](examples/network-recipes/recipes.ts) to classify `cf-cache-status`, `x-cache`, and positive `age` values. Missing or unrecognized headers are `unknown`, because absent headers cannot prove a miss.
+
+```typescript
+import { PerformanceMonitor } from 'perf-observer-js';
+import { cacheResult } from './recipes';
+
+const counts = new Map<string, { hit: number; miss: number; unknown: number }>();
+const monitor = new PerformanceMonitor({ workerUrl: '/worker.js' });
+monitor.subscribe((entry) => {
+  const path = new URL(entry.name).pathname;
+  const count = counts.get(path) ?? { hit: 0, miss: 0, unknown: 0 };
+  count[cacheResult(entry)] += 1;
+  counts.set(path, count);
+});
+```
+
+For cross-origin responses, the browser exposes only CORS-safelisted headers and headers listed in `Access-Control-Expose-Headers`. Configure the CDN to expose `cf-cache-status`, `x-cache`, and `age`. The browser check serves identical headers on another origin with and without exposure, and verifies `hit` and `unknown` respectively.
+
+### Detect deprecated API versions
+
+Read the lowercase header names. Preserve the values for your reporting backend rather than assuming a date format.
+
+```typescript
+monitor.subscribe((entry) => {
+  const deprecation = entry.responseHeaders['deprecation'];
+  const sunset = entry.responseHeaders['sunset'];
+  if (deprecation !== undefined || sunset !== undefined) {
+    console.warn('Deprecated API', new URL(entry.name).pathname, { deprecation, sunset });
+  }
+});
+```
+
+The [runnable recipe](examples/network-recipes/recipes.ts) returns this report. The browser check verifies both headers from a local API response. Cross-origin APIs must expose these headers too.
+
+### Forward entries to OpenTelemetry or Datadog RUM
+
+The [OpenTelemetry adapter](examples/rum-integrations/opentelemetry.ts) uses `WebTracerProvider` and `OTLPTraceExporter` to send actual OTLP HTTP JSON spans. The span ends at receipt time and starts one measured duration earlier. It does not claim the worker clock is the page clock or reconstruct a distributed trace. The local check inspects the exported span IDs, timestamps, path, and status.
+
+The [Datadog adapter](examples/rum-integrations/datadog.ts) accepts an initialized Browser RUM client through its public `addAction` method. Call `forwardToDatadog(datadogRum)` after configuring your SDK. The local check records that method through a mock. It does not verify Datadog intake, authentication, or account configuration. See the [Datadog custom action API](https://docs.datadoghq.com/real_user_monitoring/application_monitoring/browser/tracking_user_actions/) and [OpenTelemetry web SDK](https://open-telemetry.github.io/opentelemetry-js/modules/_opentelemetry_sdk-trace-web.html).
+
+Both adapters export path, duration, and status without query strings or response header values. They exclude collector routes to prevent reporting loops. Add other intake paths to `collectorPaths` when combining adapters. Disconnect the adapters when the owning page or component exits.
 
 ## When to use it
 

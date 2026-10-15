@@ -1,7 +1,6 @@
 import { PerformanceMonitor } from 'perf-observer-js';
 import type { PerformanceEntryWithHeaders } from 'perf-observer-js';
 
-// Define the monitoring service interface
 interface MonitoringService {
   track(entry: PerformanceEntryWithHeaders): void;
   getMetrics(): PerformanceMetrics;
@@ -17,7 +16,6 @@ interface PerformanceMetrics {
   requestsByStatus: Record<string, number>;
 }
 
-// Implementation of the monitoring service
 class PerformanceMonitoringService implements MonitoringService {
   private metrics: PerformanceMetrics = {
     totalRequests: 0,
@@ -32,43 +30,32 @@ class PerformanceMonitoringService implements MonitoringService {
   private monitor: PerformanceMonitor;
 
   constructor() {
-    // Create performance monitor instance
     this.monitor = new PerformanceMonitor({
-      transform: (entry) => {
-        // Add any custom transformations here
-        return entry;
-      }
+      workerUrl: '/worker.js',
     });
 
-    // Subscribe to performance entries
     this.monitor.subscribe(this.handleEntry.bind(this));
   }
 
   private handleEntry(entry: PerformanceEntryWithHeaders): void {
-    // Update metrics
     this.metrics.totalRequests++;
     this.totalDuration += entry.duration;
     this.metrics.averageDuration = this.totalDuration / this.metrics.totalRequests;
 
-    // Track request types
     const requestType = entry.request?.type || 'unknown';
     this.metrics.requestsByType[requestType] = (this.metrics.requestsByType[requestType] || 0) + 1;
 
-    // Track status codes
-    const status = entry.responseHeaders['status'] || 'unknown';
+    const status = String(entry.status);
     this.metrics.requestsByStatus[status] = (this.metrics.requestsByStatus[status] || 0) + 1;
 
-    // Track failed requests
-    if (status.startsWith('4') || status.startsWith('5')) {
+    if (entry.error || entry.status >= 400) {
       this.metrics.failedRequests++;
     }
 
-    // Track slow requests (over 1 second)
     if (entry.duration > 1000) {
       this.metrics.slowRequests++;
     }
 
-    // Log the entry
     console.log('Performance Entry:', {
       url: entry.name,
       duration: entry.duration,
@@ -102,17 +89,13 @@ class PerformanceMonitoringService implements MonitoringService {
   }
 }
 
-// Example usage
 const monitoringService = new PerformanceMonitoringService();
 
-// Example: Get metrics after some time
 setInterval(() => {
   const metrics = monitoringService.getMetrics();
   console.log('Current Metrics:', metrics);
 }, 5000);
 
-// Example: Reset metrics
 // monitoringService.reset();
 
-// Example: Clean up
-// monitoringService.disconnect(); 
+// monitoringService.disconnect();
