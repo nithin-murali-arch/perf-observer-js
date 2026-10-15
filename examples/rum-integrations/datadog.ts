@@ -4,7 +4,7 @@ interface DatadogActions {
   addAction(name: string, context: { path: string; duration_ms: number; status: number; rejected: boolean }): void;
 }
 
-export function forwardToDatadog(rum: DatadogActions, collectorPaths: string[] = []) {
+export function forwardToDatadog(rum: DatadogActions, collectorPaths: readonly [string, ...string[]]) {
   const monitor = new PerformanceMonitor({ workerUrl: '/worker.js' });
   monitor.subscribe((entry) => {
     const path = new URL(entry.name).pathname;

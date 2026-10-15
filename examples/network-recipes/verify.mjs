@@ -6,6 +6,7 @@ import { createServer as createVite } from 'vite';
 
 const traces = [];
 const actions = [];
+const standaloneActions = [];
 const cross = createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('cf-cache-status', 'HIT');
@@ -20,10 +21,14 @@ const server = createServer(async (req, res) => {
     res.setHeader('Content-Type', 'application/javascript');
     res.end(await readFile('public/worker.js')); return;
   }
-  if (req.url === '/v1/traces' || req.url === '/datadog-mock') {
+  if (req.url === '/standalone') {
+    res.setHeader('Content-Type', 'text/html');
+    res.end('<!doctype html><title>Standalone Datadog adapter</title>'); return;
+  }
+  if (req.url === '/v1/traces' || req.url === '/datadog-mock' || req.url === '/rum-intake') {
     let body = '';
     for await (const chunk of req) body += chunk;
-    (req.url === '/v1/traces' ? traces : actions).push(JSON.parse(body));
+    (req.url === '/v1/traces' ? traces : req.url === '/rum-intake' ? standaloneActions : actions).push(JSON.parse(body));
     res.setHeader('Content-Type', 'application/json'); res.end('{}'); return;
   }
   if (req.url === '/api/reject') { req.socket.destroy(); return; }
@@ -93,7 +98,16 @@ try {
   assert(actions.some((action) => action.name === 'network_request' && action.context.path === '/api/200' && action.context.status === 200));
   assert.equal(traces.length, 10, 'each probe exports once without exporting either collector');
   assert.equal(actions.length, 10, 'each probe calls Datadog once without reporting either collector');
-  console.log(JSON.stringify({ status: 'PASS', statuses: [200, 404, 500, 0], opaque: { status: opaque.status, error: opaque.error ?? null, headers: opaque.responseHeaders }, cacheHeaders: { hidden: hiddenHeaders, exposed: exposedHeaders }, cache: { hidden: 'unknown', exposed: 'hit', miss: 'miss' }, delayedMs: result.entries.find((entry) => entry.name.endsWith('/api/delayed')).duration, deprecation: result.deprecated, otlpSpan: span, datadogMock: actions[0], traces: traces.length, actions: actions.length }, null, 2));
+  const standaloneContext = await browser.newContext();
+  const standalone = await standaloneContext.newPage();
+  await standalone.goto(`http://127.0.0.1:${port}/standalone`);
+  await standalone.evaluate(async () => (await import('/standalone.ts')).run());
+  await standalone.waitForTimeout(500);
+  assert.equal(standaloneActions.length, 1, 'standalone adapter reports the API response once and excludes its configured intake');
+  assert.equal(standaloneActions[0].context.path, '/api/200');
+  assert.equal(standaloneActions[0].context.status, 200);
+  await standaloneContext.close();
+  console.log(JSON.stringify({ standaloneDatadog: standaloneActions, status: 'PASS', statuses: [200, 404, 500, 0], opaque: { status: opaque.status, error: opaque.error ?? null, headers: opaque.responseHeaders }, cacheHeaders: { hidden: hiddenHeaders, exposed: exposedHeaders }, cache: { hidden: 'unknown', exposed: 'hit', miss: 'miss' }, delayedMs: result.entries.find((entry) => entry.name.endsWith('/api/delayed')).duration, deprecation: result.deprecated, otlpSpan: span, datadogMock: actions[0], traces: traces.length, actions: actions.length }, null, 2));
 } finally {
   await browser?.close(); await vite.close();
   await Promise.all([new Promise((resolve) => server.close(resolve)), new Promise((resolve) => cross.close(resolve))]);
