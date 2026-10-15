@@ -23,6 +23,7 @@ const mockPerformanceEntry: PerformanceEntryWithHeaders = {
   entryType: 'resource',
   startTime: 100,
   duration: 50,
+  status: 200,
   responseHeaders: {
     'content-type': 'application/json',
     'content-length': '1000'
@@ -52,6 +53,7 @@ const mockErrorEntry: PerformanceEntryWithHeaders = {
   entryType: 'resource',
   startTime: 100,
   duration: 30,
+  status: 0,
   responseHeaders: {},
   error: 'Network error',
   timing: null,

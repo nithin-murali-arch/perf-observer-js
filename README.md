@@ -49,6 +49,7 @@ The worker file runs a `fetch` handler. For each request it intercepts, the hand
 | Field | Value |
 | --- | --- |
 | `name` | Request URL |
+| `status` | HTTP response status. `0` for a rejected fetch or an opaque response. |
 | `request.method` | Request method |
 | `request.type` | Always `'fetch'` |
 | `duration` | Milliseconds from the start of the fetch event until `fetch()` resolves, measured in the service worker. This is the time to response headers, not the time to download the body. |
@@ -56,7 +57,7 @@ The worker file runs a `fetch` handler. For each request it intercepts, the hand
 | `responseHeaders` | Response headers. For cross-origin requests the browser exposes only CORS-safelisted headers and those listed in `Access-Control-Expose-Headers`. |
 | `error` | The error message when `fetch()` rejects. The entry then has empty `responseHeaders` and `timing: null`. |
 
-HTTP error statuses such as 404 or 500 are not errors here, because `fetch()` resolves for them. Entries carry no status code.
+HTTP error statuses such as 404 or 500 are not errors here, because `fetch()` resolves for them. Read `entry.status` to detect them. `error` identifies rejected fetches, while status `0` alone can also mean an opaque response.
 
 The `timing` sub-fields are coarse placeholders, not measurements. The worker copies the start time into `connectStart`, `domainLookupStart`, `domainLookupEnd`, `fetchStart` and `requestStart`, and the end time into `connectEnd`, `responseStart` and `responseEnd`. `secureConnectionStart` is the start time for `https:` URLs and `undefined` otherwise. `redirectStart` and `redirectEnd` are always `0`. The package cannot give you DNS, connection or TLS durations. Use the Resource Timing API for those.
 
@@ -102,6 +103,7 @@ interface PerformanceEntryWithHeaders {
   entryType: string;                      // always 'resource'
   startTime: number;
   duration: number;
+  status: number;
   responseHeaders: Record<string, string>;
   error?: string;
   timing?: {
@@ -430,6 +432,10 @@ console.log('time to response headers', performance.now() - start);
 ```
 
 `entry.duration` is also time to response headers, not time to the end of the body.
+
+### How do I detect HTTP errors?
+
+Check `entry.status >= 400` for HTTP failures. A 404 or 500 response resolves normally and has no `error`. A rejected fetch has `status: 0`, an `error`, empty headers, and `timing: null`. An opaque response also has status `0`, but no rejection error.
 
 ### Does it measure Core Web Vitals?
 

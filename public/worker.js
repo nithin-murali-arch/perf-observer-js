@@ -43,6 +43,7 @@ self.addEventListener('fetch', (event) => {
           entryType: 'resource',
           startTime,
           duration,
+          status: response.status,
           responseHeaders: headers,
           timing: {
             connectStart: startTime,
@@ -77,6 +78,7 @@ self.addEventListener('fetch', (event) => {
           entryType: 'resource',
           startTime,
           duration,
+          status: 0,
           responseHeaders: {},
           error: error.message,
           timing: null,
@@ -91,4 +93,4 @@ self.addEventListener('fetch', (event) => {
         throw error;
       })
   );
-}); 
+});

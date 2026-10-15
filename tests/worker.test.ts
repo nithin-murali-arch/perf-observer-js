@@ -281,8 +281,9 @@ describe('public/worker.js', () => {
     loadWorker();
   });
 
-  it('posts a successful entry only to the client that made the request', async () => {
+  it.each([200, 404, 500])('records HTTP status %i for a response', async (status) => {
     fetchMock.mockResolvedValue({
+      status,
       clone: () => ({ headers: new Map([['content-type', 'application/json']]) })
     });
 
@@ -291,7 +292,7 @@ describe('public/worker.js', () => {
     expect(clientsMock.get).toHaveBeenCalledWith('client-a');
     expect(clientA.postMessage).toHaveBeenCalledTimes(1);
     expect(clientA.postMessage).toHaveBeenCalledWith(
-      entryMessage({ responseHeaders: { 'content-type': 'application/json' } })
+      entryMessage({ status, responseHeaders: { 'content-type': 'application/json' } })
     );
     expect(clientB.postMessage).not.toHaveBeenCalled();
   });
@@ -302,8 +303,20 @@ describe('public/worker.js', () => {
     await expect(dispatchFetch(fetchEvent({ clientId: 'client-a' }))).rejects.toThrow('Network error');
 
     expect(clientA.postMessage).toHaveBeenCalledTimes(1);
-    expect(clientA.postMessage).toHaveBeenCalledWith(entryMessage({ error: 'Network error' }));
+    expect(clientA.postMessage).toHaveBeenCalledWith(entryMessage({ status: 0, error: 'Network error' }));
     expect(clientB.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('records status 0 for opaque responses', async () => {
+    fetchMock.mockResolvedValue({
+      status: 0,
+      type: 'opaque',
+      clone: () => ({ headers: new Map() })
+    });
+
+    await dispatchFetch(fetchEvent({ clientId: 'client-a' }));
+
+    expect(clientA.postMessage).toHaveBeenCalledWith(entryMessage({ status: 0 }));
   });
 
   it('posts a navigation entry to the resulting client', async () => {
