@@ -25,3 +25,20 @@ jobs:
     - run: npm run build
     - run: npm test
     - run: npm run test:types
+
+  browser-diagnostics:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22.x
+        cache: npm
+    - run: npm ci
+    - name: Pack monitor and install diagnostic dependencies
+      working-directory: examples/browser-diagnostics
+      run: node setup.mjs --install-only
+    - run: npx playwright install --with-deps chromium
+      working-directory: examples/browser-diagnostics
+    - run: npm run verify
+      working-directory: examples/browser-diagnostics
