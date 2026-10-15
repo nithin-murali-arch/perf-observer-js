@@ -1,6 +1,9 @@
 /// <reference lib="webworker" />
 /// <reference types="serviceworker" />
 
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
 describe('Service Worker', () => {
   let fetchEvent: FetchEvent;
   let clients: Clients;
@@ -220,12 +223,110 @@ describe('Service Worker', () => {
       expect(clients.claim).toHaveBeenCalled();
     });
   });
+});
 
-  describe('message handling', () => {
-    it('should handle DISCONNECT message', () => {
-      const event = new MessageEvent('message', { data: { type: 'DISCONNECT' } });
-      if (event.data.type === 'DISCONNECT') self.close();
-      expect(self.close).toHaveBeenCalled();
-    });
+describe('public/worker.js', () => {
+  const source = readFileSync(join(__dirname, '../public/worker.js'), 'utf8');
+
+  type Listener = (event: unknown) => unknown;
+  let listeners: Record<string, Listener[]>;
+  let clientA: { id: string; postMessage: jest.Mock };
+  let clientB: { id: string; postMessage: jest.Mock };
+  let clientsMock: { get: jest.Mock; matchAll: jest.Mock; claim: jest.Mock };
+  let fetchMock: jest.Mock;
+
+  const loadWorker = () => {
+    const fakeSelf = {
+      addEventListener: (type: string, listener: Listener) => {
+        (listeners[type] = listeners[type] || []).push(listener);
+      },
+      skipWaiting: jest.fn(),
+      clients: clientsMock
+    };
+    const fakePerformance = { now: jest.fn().mockReturnValueOnce(100).mockReturnValueOnce(150) };
+    new Function('self', 'clients', 'fetch', 'performance', source)(
+      fakeSelf, clientsMock, fetchMock, fakePerformance
+    );
+  };
+
+  const fetchEvent = (ids: { clientId?: string; resultingClientId?: string }) => ({
+    request: { url: 'https://example.com/api/data', method: 'GET', type: '' },
+    clientId: '',
+    resultingClientId: '',
+    ...ids,
+    respondWith: jest.fn()
   });
-}); 
+
+  const dispatchFetch = (event: ReturnType<typeof fetchEvent>) => {
+    listeners.fetch[0](event);
+    return event.respondWith.mock.calls[0][0] as Promise<unknown>;
+  };
+
+  const entryMessage = (extra: Record<string, unknown> = {}) => ({
+    type: 'PERFORMANCE_ENTRY',
+    entry: expect.objectContaining({ name: 'https://example.com/api/data', ...extra })
+  });
+
+  beforeEach(() => {
+    listeners = {};
+    clientA = { id: 'client-a', postMessage: jest.fn() };
+    clientB = { id: 'client-b', postMessage: jest.fn() };
+    const byId: Record<string, unknown> = { 'client-a': clientA, 'client-b': clientB };
+    clientsMock = {
+      get: jest.fn(async (id: string) => byId[id]),
+      matchAll: jest.fn().mockResolvedValue([clientA, clientB]),
+      claim: jest.fn()
+    };
+    fetchMock = jest.fn();
+    loadWorker();
+  });
+
+  it('posts a successful entry only to the client that made the request', async () => {
+    fetchMock.mockResolvedValue({
+      clone: () => ({ headers: new Map([['content-type', 'application/json']]) })
+    });
+
+    await dispatchFetch(fetchEvent({ clientId: 'client-a' }));
+
+    expect(clientsMock.get).toHaveBeenCalledWith('client-a');
+    expect(clientA.postMessage).toHaveBeenCalledTimes(1);
+    expect(clientA.postMessage).toHaveBeenCalledWith(
+      entryMessage({ responseHeaders: { 'content-type': 'application/json' } })
+    );
+    expect(clientB.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('posts a failed entry only to the client that made the request', async () => {
+    fetchMock.mockRejectedValue(new Error('Network error'));
+
+    await expect(dispatchFetch(fetchEvent({ clientId: 'client-a' }))).rejects.toThrow('Network error');
+
+    expect(clientA.postMessage).toHaveBeenCalledTimes(1);
+    expect(clientA.postMessage).toHaveBeenCalledWith(entryMessage({ error: 'Network error' }));
+    expect(clientB.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('posts a navigation entry to the resulting client', async () => {
+    fetchMock.mockResolvedValue({ clone: () => ({ headers: new Map() }) });
+
+    await dispatchFetch(fetchEvent({ clientId: '', resultingClientId: 'client-b' }));
+
+    expect(clientsMock.get).toHaveBeenCalledWith('client-b');
+    expect(clientB.postMessage).toHaveBeenCalledTimes(1);
+    expect(clientA.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('posts nothing when the request has no client id', async () => {
+    fetchMock.mockResolvedValue({ clone: () => ({ headers: new Map() }) });
+
+    await dispatchFetch(fetchEvent({}));
+
+    expect(clientsMock.get).not.toHaveBeenCalled();
+    expect(clientA.postMessage).not.toHaveBeenCalled();
+    expect(clientB.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('registers no message listener', () => {
+    expect(listeners.message).toBeUndefined();
+  });
+});
