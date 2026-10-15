@@ -3,6 +3,7 @@ export interface PerformanceEntryWithHeaders {
     entryType: string;
     startTime: number;
     duration: number;
+    status: number;
     responseHeaders: Record<string, string>;
     error?: string;
     timing?: {

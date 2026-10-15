@@ -10,6 +10,7 @@ const entry: PerformanceEntryWithHeaders = {
   entryType: 'resource',
   startTime: 1,
   duration: 2,
+  status: 200,
   responseHeaders: { 'content-type': 'application/json' }
 };
 
