@@ -41,17 +41,6 @@ const mockPerformanceEntry: PerformanceEntryWithHeaders = {
   request: {
     method: 'GET',
     type: 'fetch'
-  },
-  toJSON: function() {
-    return {
-      name: this.name,
-      entryType: this.entryType,
-      startTime: this.startTime,
-      duration: this.duration,
-      responseHeaders: this.responseHeaders,
-      timing: this.timing,
-      request: this.request
-    };
   }
 };
 
@@ -67,18 +56,6 @@ const mockErrorEntry: PerformanceEntryWithHeaders = {
   request: {
     method: 'GET',
     type: 'fetch'
-  },
-  toJSON: function() {
-    return {
-      name: this.name,
-      entryType: this.entryType,
-      startTime: this.startTime,
-      duration: this.duration,
-      responseHeaders: this.responseHeaders,
-      error: this.error,
-      timing: this.timing,
-      request: this.request
-    };
   }
 };
 
