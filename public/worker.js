@@ -7,11 +7,18 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(clients.claim());
 });
 
-self.addEventListener('message', (event) => {
-  if (event.data.type === 'DISCONNECT') {
-    self.close();
+// Entries go only to the page that made the request. A navigation has no clientId yet,
+// so fall back to the client the navigation creates.
+async function postEntry(event, entry) {
+  const id = event.clientId || event.resultingClientId;
+  const client = id ? await self.clients.get(id) : undefined;
+  if (client) {
+    client.postMessage({
+      type: 'PERFORMANCE_ENTRY',
+      entry
+    });
   }
-});
+}
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
@@ -56,14 +63,7 @@ self.addEventListener('fetch', (event) => {
           }
         };
 
-        // Send entry to main thread
-        const clients = await self.clients.matchAll();
-        clients.forEach(client => {
-          client.postMessage({
-            type: 'PERFORMANCE_ENTRY',
-            entry
-          });
-        });
+        await postEntry(event, entry);
 
         return response;
       })
@@ -86,14 +86,7 @@ self.addEventListener('fetch', (event) => {
           }
         };
 
-        // Send error entry to main thread
-        const clients = await self.clients.matchAll();
-        clients.forEach(client => {
-          client.postMessage({
-            type: 'PERFORMANCE_ENTRY',
-            entry
-          });
-        });
+        await postEntry(event, entry);
 
         throw error;
       })

@@ -3,7 +3,15 @@ import { PerformanceMonitorConfig, PerformanceEntryWithHeaders, SubscriptionCall
 export class PerformanceMonitor {
   private subscribers: Set<SubscriptionCallback> = new Set();
   private transform: TransformFunction | null = null;
-  private worker: ServiceWorker | null = null;
+  private disconnected = false;
+  private readonly onMessage = (event: MessageEvent): void => {
+    if (event.data.type === 'PERFORMANCE_ENTRY') {
+      const entry = event.data.entry;
+      if (entry) {
+        this.notifySubscribers(entry);
+      }
+    }
+  };
 
   constructor(config: PerformanceMonitorConfig) {
     if (!config.workerUrl) {
@@ -16,19 +24,11 @@ export class PerformanceMonitor {
   private async registerServiceWorker(workerUrl: string): Promise<void> {
     if ('serviceWorker' in navigator) {
       try {
-        // Register the service worker
-        const registration = await navigator.serviceWorker.register(workerUrl);
-        this.worker = registration.active;
-
-        // Set up message listener
-        navigator.serviceWorker.addEventListener('message', (event) => {
-          if (event.data.type === 'PERFORMANCE_ENTRY') {
-            const entry = event.data.entry;
-            if (entry) {
-              this.notifySubscribers(entry);
-            }
-          }
-        });
+        await navigator.serviceWorker.register(workerUrl);
+        // disconnect() can run while register() is pending (React StrictMode remounts)
+        if (!this.disconnected) {
+          navigator.serviceWorker.addEventListener('message', this.onMessage);
+        }
       } catch (error) {
         console.error('Service Worker registration failed:', error);
       }
@@ -54,10 +54,12 @@ export class PerformanceMonitor {
     };
   }
 
+  /** Terminal for this instance. Create a new monitor to start again. */
   public disconnect(): void {
-    if (this.worker) {
-      this.worker.postMessage({ type: 'DISCONNECT' });
+    this.disconnected = true;
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.removeEventListener('message', this.onMessage);
     }
     this.subscribers.clear();
   }
-} 
+}

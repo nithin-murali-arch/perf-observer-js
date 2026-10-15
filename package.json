@@ -1,6 +1,6 @@
 {
   "name": "perf-observer-js",
-  "version": "2.2.5",
+  "version": "2.3.0",
   "description": "Service worker monitor for network requests in web apps. Reports duration and response headers. Does not measure Web Vitals.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

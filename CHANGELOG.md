@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.0 (2026-10-15)
+
+- `disconnect()` now removes the page's `message` listener from `navigator.serviceWorker`. Before, each monitor left its listener behind. A `disconnect()` that runs before registration finishes, as in React StrictMode, also stops the listener from being added. `disconnect()` is terminal, so create a new monitor to start again.
+- the worker posts each entry only to the page that made the request. Before, every tab received the requests of all controlled tabs. Requests made before the worker controls the page are not reported.
+- removed the `DISCONNECT` message. The worker never handled it, because `self.close()` does not exist in a service worker, and `disconnect()` skipped it on a fresh install. A new worker ignores `DISCONNECT` from an older library, and a new library sends none.
+
 ## 2.2.5 (2026-10-15)
 
 - `main` and `types` now point at `dist/index`, so `PerformanceEntryWithHeaders`, `PerformanceMonitorConfig` and `Subscription` can be imported from `perf-observer-js`

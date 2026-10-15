@@ -2,13 +2,15 @@ import { PerformanceMonitor } from '../src/PerformanceMonitor';
 import { PerformanceEntryWithHeaders } from '../src/types';
 
 // Mock Service Worker
+const mockWorkerPostMessage = jest.fn();
 const mockServiceWorker = {
   register: jest.fn().mockResolvedValue({
     active: {
-      postMessage: jest.fn()
+      postMessage: mockWorkerPostMessage
     }
   }),
-  addEventListener: jest.fn()
+  addEventListener: jest.fn(),
+  removeEventListener: jest.fn()
 };
 
 // Mock btoa
@@ -269,6 +271,8 @@ describe('PerformanceMonitor', () => {
   });
 
   describe('cleanup', () => {
+    const flush = () => new Promise(resolve => setTimeout(resolve, 0));
+
     it('should disconnect service worker and clear subscribers', () => {
       monitor.subscribe(mockSubscriber);
       monitor.disconnect();
@@ -282,6 +286,57 @@ describe('PerformanceMonitor', () => {
       } as MessageEvent);
 
       expect(mockSubscriber).not.toHaveBeenCalled();
+    });
+
+    it('should remove the same message listener it added', async () => {
+      const listeners = new Set<(event: MessageEvent) => void>();
+      mockServiceWorker.addEventListener.mockImplementation((_type, handler) => listeners.add(handler));
+      mockServiceWorker.removeEventListener.mockImplementation((_type, handler) => listeners.delete(handler));
+      mockServiceWorker.addEventListener.mockClear();
+      try {
+        const callback = jest.fn();
+        const fresh = new PerformanceMonitor({ workerUrl });
+        fresh.subscribe(callback);
+        await flush();
+
+        const added = mockServiceWorker.addEventListener.mock.calls.map(call => call[1]);
+        expect(added).toHaveLength(1);
+
+        fresh.disconnect();
+
+        expect(mockServiceWorker.removeEventListener).toHaveBeenCalledWith('message', added[0]);
+        listeners.forEach(listener => listener({
+          data: { type: 'PERFORMANCE_ENTRY', entry: mockPerformanceEntry }
+        } as MessageEvent));
+        expect(callback).not.toHaveBeenCalled();
+      } finally {
+        mockServiceWorker.addEventListener.mockReset();
+        mockServiceWorker.removeEventListener.mockReset();
+      }
+    });
+
+    it('should not add a message listener when disconnected before registration resolves', async () => {
+      let resolveRegistration: (registration: unknown) => void = () => undefined;
+      mockServiceWorker.register.mockReturnValueOnce(
+        new Promise(resolve => { resolveRegistration = resolve; })
+      );
+      mockServiceWorker.addEventListener.mockClear();
+
+      const fresh = new PerformanceMonitor({ workerUrl });
+      fresh.disconnect();
+      resolveRegistration({ active: null });
+      await flush();
+
+      expect(mockServiceWorker.addEventListener).not.toHaveBeenCalled();
+    });
+
+    it('should not post anything to the worker', async () => {
+      mockWorkerPostMessage.mockClear();
+
+      monitor.disconnect();
+      await flush();
+
+      expect(mockWorkerPostMessage).not.toHaveBeenCalled();
     });
   });
 }); 

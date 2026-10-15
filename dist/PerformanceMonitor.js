@@ -5,7 +5,15 @@ class PerformanceMonitor {
     constructor(config) {
         this.subscribers = new Set();
         this.transform = null;
-        this.worker = null;
+        this.disconnected = false;
+        this.onMessage = (event) => {
+            if (event.data.type === 'PERFORMANCE_ENTRY') {
+                const entry = event.data.entry;
+                if (entry) {
+                    this.notifySubscribers(entry);
+                }
+            }
+        };
         if (!config.workerUrl) {
             throw new Error('workerUrl is required in PerformanceMonitor configuration');
         }
@@ -15,18 +23,11 @@ class PerformanceMonitor {
     async registerServiceWorker(workerUrl) {
         if ('serviceWorker' in navigator) {
             try {
-                // Register the service worker
-                const registration = await navigator.serviceWorker.register(workerUrl);
-                this.worker = registration.active;
-                // Set up message listener
-                navigator.serviceWorker.addEventListener('message', (event) => {
-                    if (event.data.type === 'PERFORMANCE_ENTRY') {
-                        const entry = event.data.entry;
-                        if (entry) {
-                            this.notifySubscribers(entry);
-                        }
-                    }
-                });
+                await navigator.serviceWorker.register(workerUrl);
+                // disconnect() can run while register() is pending (React StrictMode remounts)
+                if (!this.disconnected) {
+                    navigator.serviceWorker.addEventListener('message', this.onMessage);
+                }
             }
             catch (error) {
                 console.error('Service Worker registration failed:', error);
@@ -51,9 +52,11 @@ class PerformanceMonitor {
             unsubscribe: () => this.subscribers.delete(callback)
         };
     }
+    /** Terminal for this instance. Create a new monitor to start again. */
     disconnect() {
-        if (this.worker) {
-            this.worker.postMessage({ type: 'DISCONNECT' });
+        this.disconnected = true;
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.removeEventListener('message', this.onMessage);
         }
         this.subscribers.clear();
     }
