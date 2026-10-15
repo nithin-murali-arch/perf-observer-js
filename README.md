@@ -1,7 +1,11 @@
 # perf-observer-js
 
-[![CI](https://github.com/nithin-murali-arch/perf-observer-js/actions/workflows/test.yml/badge.svg)](https://github.com/nithin-murali-arch/perf-observer-js/actions/workflows/test.yml)
-[![npm version](https://img.shields.io/npm/v/perf-observer-js.svg)](https://www.npmjs.com/package/perf-observer-js)
+[![Tests](https://github.com/nithin-murali-arch/perf-observer-js/actions/workflows/test.yml/badge.svg)](https://github.com/nithin-murali-arch/perf-observer-js/actions/workflows/test.yml)
+[![npm version](https://img.shields.io/npm/v/perf-observer-js)](https://www.npmjs.com/package/perf-observer-js)
+[![npm downloads](https://img.shields.io/npm/dm/perf-observer-js)](https://www.npmjs.com/package/perf-observer-js)
+[![license](https://img.shields.io/npm/l/perf-observer-js)](https://github.com/nithin-murali-arch/perf-observer-js/blob/main/LICENSE)
+[![types](https://img.shields.io/npm/types/perf-observer-js)](https://www.npmjs.com/package/perf-observer-js)
+[![minified + gzip size](https://img.shields.io/bundlejs/size/perf-observer-js)](https://bundlejs.com/?q=perf-observer-js)
 
 `perf-observer-js` is a service worker based monitor for network requests in web apps. It reports the URL, method, duration and response headers of each request the service worker intercepts through one `subscribe` callback. It does not use `PerformanceObserver` and it does not measure Web Vitals (LCP, INP, CLS, FCP, TTFB). Use [`web-vitals`](https://www.npmjs.com/package/web-vitals) for those.
 
@@ -149,26 +153,235 @@ module.exports = {
 
 ### Next.js
 
-Copy `worker.js` into the `public/` directory. Next.js serves `public/` at the site root, so the file is available at `/worker.js` and needs no rewrite. Create the monitor inside a client component, in `useEffect`:
-
-```tsx
-'use client';
-import { useEffect } from 'react';
-import { PerformanceMonitor } from 'perf-observer-js';
-
-export function NetworkMonitor() {
-  useEffect(() => {
-    const monitor = new PerformanceMonitor({ workerUrl: '/worker.js' });
-    const subscription = monitor.subscribe((entry) => console.log(entry.name, entry.duration));
-    return () => subscription.unsubscribe();
-  }, []);
-  return null;
-}
-```
+Copy `worker.js` into the `public/` directory. Next.js serves `public/` at the site root, so the file is available at `/worker.js` and needs no rewrite. Create the monitor inside a client component, as in [Show requests in a Next.js App Router app](#show-requests-in-a-nextjs-app-router-app).
 
 ### Other setups
 
 Serve `public/worker.js` as a static file with a JavaScript content type at the URL you pass as `workerUrl`.
+
+## Use it with your framework
+
+Each guide creates the monitor only in the browser and expects your site to serve the worker at `/worker.js`. To serve it there, see [Setup by build tool](#setup-by-build-tool).
+
+### Show requests in a React component
+
+To keep a component's requests in state, create the monitor in `useEffect` and call `disconnect()` in the cleanup.
+
+```typescript
+// src/useNetworkEntries.ts
+import { useEffect, useState } from 'react';
+import { PerformanceMonitor, type PerformanceEntryWithHeaders } from 'perf-observer-js';
+
+export function useNetworkEntries(workerUrl = '/worker.js') {
+  const [entries, setEntries] = useState<PerformanceEntryWithHeaders[]>([]);
+
+  useEffect(() => {
+    const monitor = new PerformanceMonitor({ workerUrl });
+    monitor.subscribe((entry) => setEntries((previous) => [...previous, entry].slice(-100)));
+    return () => monitor.disconnect();
+  }, [workerUrl]);
+
+  return entries;
+}
+```
+
+```tsx
+// src/NetworkLog.tsx
+import { useNetworkEntries } from './useNetworkEntries';
+
+export function NetworkLog() {
+  const entries = useNetworkEntries();
+  return (
+    <ul>
+      {entries.map((entry, index) => (
+        <li key={index}>
+          {entry.request?.method} {entry.name} {Math.round(entry.duration)} ms
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+The hook keeps the last 100 entries. In development, `<StrictMode>` runs the effect, the cleanup and the effect again, and `disconnect()` stops the first monitor before it starts listening.
+
+### Show requests in a Next.js App Router app
+
+To list the requests of every page, save the hook from [Show requests in a React component](#show-requests-in-a-react-component) as `app/useNetworkEntries.ts`, call it from a client component, and render that component in the root layout.
+
+```tsx
+// app/NetworkLog.tsx
+'use client';
+import { useNetworkEntries } from './useNetworkEntries';
+
+export function NetworkLog() {
+  const entries = useNetworkEntries();
+  return (
+    <ul>
+      {entries.map((entry, index) => (
+        <li key={index}>
+          {entry.request?.method} {entry.name} {Math.round(entry.duration)} ms
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+```tsx
+// app/layout.tsx
+import type { ReactNode } from 'react';
+import { NetworkLog } from './NetworkLog';
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        {children}
+        <NetworkLog />
+      </body>
+    </html>
+  );
+}
+```
+
+On the server, Next.js renders `NetworkLog` without running its effect, so the server never creates a monitor.
+
+### Show requests in a Vue 3 component
+
+To keep a component's requests in a ref, create the monitor in `onMounted` and call `disconnect()` in `onBeforeUnmount`.
+
+```typescript
+// src/useNetworkEntries.ts
+import { onBeforeUnmount, onMounted, shallowRef } from 'vue';
+import { PerformanceMonitor, type PerformanceEntryWithHeaders } from 'perf-observer-js';
+
+export function useNetworkEntries(workerUrl = '/worker.js') {
+  const entries = shallowRef<PerformanceEntryWithHeaders[]>([]);
+  let monitor: PerformanceMonitor | undefined;
+
+  onMounted(() => {
+    monitor = new PerformanceMonitor({ workerUrl });
+    monitor.subscribe((entry) => {
+      entries.value = [...entries.value, entry].slice(-100);
+    });
+  });
+  onBeforeUnmount(() => monitor?.disconnect());
+
+  return entries;
+}
+```
+
+```vue
+<!-- src/components/NetworkLog.vue -->
+<script setup lang="ts">
+import { useNetworkEntries } from '../useNetworkEntries';
+
+const entries = useNetworkEntries();
+</script>
+
+<template>
+  <ul>
+    <li v-for="(entry, index) in entries" :key="index">
+      {{ entry.request?.method }} {{ entry.name }} {{ Math.round(entry.duration) }} ms
+    </li>
+  </ul>
+</template>
+```
+
+Call the composable from `setup`. Vue does not run `onMounted` during server rendering, so the server never creates a monitor.
+
+### Show requests in a Svelte 5 component
+
+To keep a component's requests in state, create the monitor in `onMount` and return a function that calls `disconnect()`.
+
+```svelte
+<!-- src/lib/NetworkLog.svelte -->
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { PerformanceMonitor, type PerformanceEntryWithHeaders } from 'perf-observer-js';
+
+  let entries = $state.raw<PerformanceEntryWithHeaders[]>([]);
+
+  onMount(() => {
+    const monitor = new PerformanceMonitor({ workerUrl: '/worker.js' });
+    monitor.subscribe((entry) => {
+      entries = [...entries, entry].slice(-100);
+    });
+    return () => monitor.disconnect();
+  });
+</script>
+
+<ul>
+  {#each entries as entry, index (index)}
+    <li>{entry.request?.method} {entry.name} {Math.round(entry.duration)} ms</li>
+  {/each}
+</ul>
+```
+
+Svelte runs `onMount` only in the browser, so SvelteKit can render this component on the server.
+
+### Expose requests from an Angular service
+
+To share requests across components, create the monitor in a root service only when `isPlatformBrowser` is true, and call `disconnect()` in `ngOnDestroy`.
+
+```typescript
+// src/app/network-entries.service.ts
+import { Injectable, OnDestroy, PLATFORM_ID, inject, signal } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
+import { PerformanceMonitor, type PerformanceEntryWithHeaders } from 'perf-observer-js';
+
+@Injectable({ providedIn: 'root' })
+export class NetworkEntriesService implements OnDestroy {
+  private readonly monitor = isPlatformBrowser(inject(PLATFORM_ID))
+    ? new PerformanceMonitor({ workerUrl: '/worker.js' })
+    : null;
+  private readonly list = signal<PerformanceEntryWithHeaders[]>([]);
+  readonly entries = this.list.asReadonly();
+
+  constructor() {
+    this.monitor?.subscribe((entry) => this.list.update((previous) => [...previous, entry].slice(-100)));
+  }
+
+  ngOnDestroy(): void {
+    this.monitor?.disconnect();
+  }
+}
+```
+
+Inject `NetworkEntriesService` in a component and read `entries()` in its template. On the server, `isPlatformBrowser` returns `false`, so the service creates no monitor and `entries()` stays empty.
+
+### Send entries to your analytics endpoint
+
+To report requests to your own endpoint, collect entries and send them with `navigator.sendBeacon` when the page becomes hidden.
+
+```typescript
+// src/networkAnalytics.ts
+import { PerformanceMonitor } from 'perf-observer-js';
+
+const endpoint = new URL('/analytics/network', location.href).href;
+const queue: { url: string; method?: string; duration: number; error?: string }[] = [];
+
+const monitor = new PerformanceMonitor({ workerUrl: '/worker.js' });
+
+monitor.subscribe((entry) => {
+  if (entry.name === endpoint) return;
+  queue.push({
+    url: entry.name,
+    method: entry.request?.method,
+    duration: Math.round(entry.duration),
+    error: entry.error
+  });
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && queue.length > 0) {
+    navigator.sendBeacon(endpoint, JSON.stringify(queue.splice(0)));
+  }
+});
+```
+
+The `entry.name === endpoint` check stops the recipe from reporting its own beacon. `sendBeacon` sends the string with a `text/plain;charset=UTF-8` content type, so parse the body as JSON on your server.
 
 ## When to use it
 
@@ -233,6 +446,10 @@ Not all of them. The worker takes control of the open page when it activates, by
 ### How do I set it up with Vite, webpack and Next.js?
 
 Copy `worker.js` so that your site serves it at the URL you pass as `workerUrl`. See [Setup by build tool](#setup-by-build-tool) for each tool.
+
+### How do I use perf-observer-js with React, Vue, Svelte or Angular?
+
+Follow the guide for your framework in [Use it with your framework](#use-it-with-your-framework), which creates the monitor in the browser and calls `disconnect()` on cleanup.
 
 ### How is it different from the Resource Timing API?
 

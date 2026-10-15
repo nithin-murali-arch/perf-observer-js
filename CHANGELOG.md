@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.3.1 (2026-10-15)
+
+- README gained npm downloads, license, types and bundle size badges
+- README gained framework guides for React, Next.js App Router, Vue 3, Svelte 5 and Angular, and a recipe that sends entries to an analytics endpoint with `navigator.sendBeacon`. The Next.js setup now links to its guide, which calls `disconnect()` on cleanup instead of only `unsubscribe()`.
+
 ## 2.3.0 (2026-10-15)
 
 - `disconnect()` now removes the page's `message` listener from `navigator.serviceWorker`. Before, each monitor left its listener behind. A `disconnect()` that runs before registration finishes, as in React StrictMode, also stops the listener from being added. `disconnect()` is terminal, so create a new monitor to start again.
