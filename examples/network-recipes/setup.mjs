@@ -1,0 +1,13 @@
+import { execFileSync } from 'node:child_process';
+import { copyFileSync, mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+const root = fileURLToPath(new URL('../../', import.meta.url));
+const here = fileURLToPath(new URL('.', import.meta.url));
+const env = { ...process.env };
+const packed = JSON.parse(execFileSync('npm', ['pack', '--json'], { cwd: root, env, encoding: 'utf8' }))[0].filename;
+copyFileSync(root + packed, here + 'perf-observer-js.tgz');
+execFileSync('npm', ['install', './perf-observer-js.tgz', '--force', '--no-audit', '--no-fund'], { cwd: here, env, stdio: 'inherit' });
+mkdirSync(here + 'public', { recursive: true });
+copyFileSync(here + 'node_modules/perf-observer-js/public/worker.js', here + 'public/worker.js');
+execFileSync('npm', ['run', 'build'], { cwd: here, env, stdio: 'inherit' });
+execFileSync(process.execPath, ['verify.mjs'], { cwd: here, env, stdio: 'inherit' });

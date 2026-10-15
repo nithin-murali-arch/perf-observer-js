@@ -1,7 +1,7 @@
 {
   "name": "perf-observer-js",
   "version": "2.3.1",
-  "description": "Service worker monitor for network requests in web apps. Reports duration and response headers. Does not measure Web Vitals.",
+  "description": "Service worker monitor for network requests in web apps. Reports duration, HTTP status, and response headers. Does not measure Web Vitals.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -17,7 +17,8 @@
     "test:types": "tsc -p tests/types/tsconfig.json",
     "lint": "eslint src/**/*.ts tests/**/*.ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "verify": "node examples/network-recipes/setup.mjs"
   },
   "keywords": [
     "service-worker",
