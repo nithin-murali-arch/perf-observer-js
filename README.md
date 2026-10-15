@@ -1,105 +1,106 @@
 # perf-observer-js
 
-Monitor network requests in web apps with Service Worker timing and response headers.
-
 [![CI](https://github.com/nithin-murali-arch/perf-observer-js/actions/workflows/test.yml/badge.svg)](https://github.com/nithin-murali-arch/perf-observer-js/actions/workflows/test.yml)
 [![npm version](https://img.shields.io/npm/v/perf-observer-js.svg)](https://www.npmjs.com/package/perf-observer-js)
+
+`perf-observer-js` is a service worker based monitor for network requests in web apps. It reports the URL, method, duration and response headers of each request the service worker intercepts through one `subscribe` callback. It does not use `PerformanceObserver` and it does not measure Web Vitals (LCP, INP, CLS, FCP, TTFB). Use [`web-vitals`](https://www.npmjs.com/package/web-vitals) for those.
+
+It has no dependencies. Unminified, the client code is 3.1 kB (1,034 bytes gzipped) and the worker file is 2.7 kB (768 bytes gzipped).
+
+## Install
 
 ```bash
 npm install perf-observer-js
 ```
 
-```typescript
-import { PerformanceMonitor } from 'perf-observer-js';
-const monitor = new PerformanceMonitor({ workerUrl: '/worker.js' });
-monitor.subscribe((entry) => {
-  console.log(entry.name, entry.duration, entry.responseHeaders);
-});
-```
-
-## Features
-
-- 🔍 **Comprehensive Network Monitoring**: Track all network requests with detailed timing information
-- 📊 **Response Headers**: Access response headers for each request
-- ⚡ **Service Worker Based**: Uses Service Workers for reliable request interception
-- 🔄 **Transform Support**: Customize performance entries with transform functions
-- 🎯 **TypeScript Ready**: Full TypeScript support with type definitions
-- 📦 **Zero Dependencies**: Lightweight and framework-agnostic
-- 🛡️ **Error Handling**: Robust error handling for failed requests
-
-## Installation
+Copy the worker file into the directory your server serves from the site root, for example `public/`:
 
 ```bash
-npm install performance-observer-js
-# or
-yarn add performance-observer-js
+cp node_modules/perf-observer-js/public/worker.js public/worker.js
 ```
 
-## Quick Start
+## Quick start
 
 ```typescript
-import { PerformanceMonitor } from 'performance-observer-js';
+import { PerformanceMonitor } from 'perf-observer-js';
 
-// Initialize the monitor
-const monitor = new PerformanceMonitor({
-  workerUrl: '/worker.js'
-});
+const monitor = new PerformanceMonitor({ workerUrl: '/worker.js' });
 
-// Subscribe to performance entries
 const subscription = monitor.subscribe((entry) => {
-  console.log('Network request:', entry);
-  // Access timing information
-  console.log('Request duration:', entry.duration);
-  // Access response headers
-  console.log('Response headers:', entry.responseHeaders);
+  console.log(entry.name, entry.duration, entry.responseHeaders);
 });
 
-// Cleanup when done
+// Stop receiving entries
 subscription.unsubscribe();
-// or
+// or remove every subscriber
 monitor.disconnect();
 ```
 
-## Configuration
+Create the monitor in the browser only. The constructor registers the service worker.
 
-The `PerformanceMonitor` constructor accepts the following configuration options:
+## What it measures
+
+The worker file runs a `fetch` handler. For each request it intercepts, the handler re-issues the request with `fetch()`, notes the time before and after, and posts one entry to the pages it controls.
+
+| Field | Value |
+| --- | --- |
+| `name` | Request URL |
+| `request.method` | Request method |
+| `request.type` | Always `'fetch'` |
+| `duration` | Milliseconds from the start of the fetch event until `fetch()` resolves, measured in the service worker. This is the time to response headers, not the time to download the body. |
+| `startTime` | `performance.now()` in the service worker. Its time origin differs from the page, so do not compare it with page timestamps. |
+| `responseHeaders` | Response headers. For cross-origin requests the browser exposes only CORS-safelisted headers and those listed in `Access-Control-Expose-Headers`. |
+| `error` | The error message when `fetch()` rejects. The entry then has empty `responseHeaders` and `timing: null`. |
+
+HTTP error statuses such as 404 or 500 are not errors here, because `fetch()` resolves for them. Entries carry no status code.
+
+The `timing` sub-fields are coarse placeholders, not measurements. The worker copies the start time into `connectStart`, `domainLookupStart`, `domainLookupEnd`, `fetchStart` and `requestStart`, and the end time into `connectEnd`, `responseStart` and `responseEnd`. `secureConnectionStart` is the start time for `https:` URLs and `undefined` otherwise. `redirectStart` and `redirectEnd` are always `0`. The package cannot give you DNS, connection or TLS durations. Use the Resource Timing API for those.
+
+With several tabs open, the worker posts each entry to every page it controls. A subscriber in one tab receives the requests of all controlled tabs.
+
+## API
+
+### `new PerformanceMonitor(config)`
 
 ```typescript
 interface PerformanceMonitorConfig {
-  workerUrl: string;  // Required: URL to the service worker file
-  transform?: (entry: PerformanceEntryWithHeaders) => PerformanceEntryWithHeaders;  // Optional: Transform function
+  workerUrl: string;
+  transform?: (entry: PerformanceEntryWithHeaders) => PerformanceEntryWithHeaders;
 }
 ```
 
-### Example with Transform
+`workerUrl` is required. The constructor throws if it is empty. It registers the worker at that URL and listens for its messages. A worker served from `/worker.js` controls the whole origin.
+
+`transform` runs on each entry before subscribers receive it:
 
 ```typescript
 const monitor = new PerformanceMonitor({
   workerUrl: '/worker.js',
-  transform: (entry) => {
-    // Add custom properties
-    return {
-      ...entry,
-      customMetric: entry.duration * 2
-    };
-  }
+  transform: (entry) => ({ ...entry, duration: Math.round(entry.duration) })
 });
 ```
 
-## Performance Entry Structure
+If `transform` or a subscriber throws, the monitor logs the error with `console.error` and the remaining subscribers do not run for that entry.
 
-Each performance entry includes:
+### `monitor.subscribe(callback)`
+
+Adds `callback` and returns `{ unsubscribe }`. Throws if `callback` is not a function.
+
+### `monitor.disconnect()`
+
+Removes all subscribers and sends the worker a `DISCONNECT` message.
+
+### `PerformanceEntryWithHeaders`
 
 ```typescript
 interface PerformanceEntryWithHeaders {
-  name: string;              // Request URL
-  entryType: string;         // Always 'resource'
-  startTime: number;         // Request start time
-  duration: number;          // Total request duration
-  responseHeaders: {         // Response headers
-    [key: string]: string;
-  };
-  timing: {                  // Detailed timing information
+  name: string;
+  entryType: string;                      // always 'resource'
+  startTime: number;
+  duration: number;
+  responseHeaders: Record<string, string>;
+  error?: string;
+  timing?: {
     connectStart: number;
     connectEnd: number;
     domainLookupStart: number;
@@ -108,79 +109,148 @@ interface PerformanceEntryWithHeaders {
     requestStart: number;
     responseStart: number;
     responseEnd: number;
-    secureConnectionStart: number;
-    redirectStart: number;
-    redirectEnd: number;
+    secureConnectionStart?: number;
+    redirectStart?: number;
+    redirectEnd?: number;
   } | null;
-  request: {                 // Request details
+  request?: {
     method: string;
-    type: string;
+    type: string;                         // always 'fetch'
   };
-  error?: string;            // Error message if request failed
 }
 ```
 
-## Setup
+The package also exports the types `Subscription`, `SubscriptionCallback`, `TransformFunction` and `PerformanceMonitorConfig`.
 
-### 1. Copy Worker File
+## Setup by build tool
 
-First, copy the worker file from the package to your public directory:
+The worker must be a real file at the URL you pass as `workerUrl`, on the same origin as the page. Copy `node_modules/perf-observer-js/public/worker.js` there.
 
-```bash
-cp node_modules/performance-observer-js/public/worker.js public/
-```
+### Vite
 
-### 2. Configure Your Build Tool
+Put `worker.js` in the `public/` directory. Vite serves it at `/worker.js` and copies it to the root of the build output.
 
-#### Webpack
+### webpack
+
+webpack does not copy static files. Copy the worker to the output root with `copy-webpack-plugin`:
 
 ```javascript
 // webpack.config.js
+const CopyPlugin = require('copy-webpack-plugin');
+
 module.exports = {
-  // ... other config
-  output: {
-    publicPath: '/'
-  }
+  plugins: [
+    new CopyPlugin({
+      patterns: [{ from: 'node_modules/perf-observer-js/public/worker.js', to: 'worker.js' }]
+    })
+  ]
 };
 ```
 
-#### Vite
+### Next.js
 
-```javascript
-// vite.config.js
-export default {
-  // ... other config
-  publicDir: 'public'
-};
+Copy `worker.js` into the `public/` directory. Next.js serves `public/` at the site root, so the file is available at `/worker.js` and needs no rewrite. Create the monitor inside a client component, in `useEffect`:
+
+```tsx
+'use client';
+import { useEffect } from 'react';
+import { PerformanceMonitor } from 'perf-observer-js';
+
+export function NetworkMonitor() {
+  useEffect(() => {
+    const monitor = new PerformanceMonitor({ workerUrl: '/worker.js' });
+    const subscription = monitor.subscribe((entry) => console.log(entry.name, entry.duration));
+    return () => subscription.unsubscribe();
+  }, []);
+  return null;
+}
 ```
 
-#### Next.js
+### Other setups
 
-```javascript
-// next.config.js
-module.exports = {
-  // ... other config
-  async rewrites() {
-    return [
-      {
-        source: '/worker.js',
-        destination: '/public/worker.js'
-      }
-    ];
-  }
-};
+Serve `public/worker.js` as a static file with a JavaScript content type at the URL you pass as `workerUrl`.
+
+## When to use it
+
+- You want the response headers of every request a page makes, such as cache headers, CDN headers or request IDs, in real user sessions.
+- You want a single `subscribe` callback to forward per-request duration and headers to your own logging endpoint.
+- Do not use it for Web Vitals. Use `web-vitals`.
+- Do not use it when you need DNS, connection, TLS or time-to-first-byte breakdowns, or when your app already has its own service worker. A scope has one active worker, and this worker answers every request it intercepts.
+
+## Alternatives
+
+| | Measures | Per-request timing | Response headers | Needs a service worker |
+| --- | --- | --- | --- | --- |
+| `perf-observer-js` | Requests the service worker intercepts | Total duration to response headers | Yes | Yes |
+| [`@opentelemetry/instrumentation-fetch`](https://www.npmjs.com/package/@opentelemetry/instrumentation-fetch) | Calls to `fetch()` in the page, exported as traces | Spans for each call | Not recorded by default | No |
+| [`web-vitals`](https://www.npmjs.com/package/web-vitals) | Core Web Vitals for the page | No, page-level metrics | No | No |
+| Resource Timing API with `PerformanceObserver` | Resources the page loads | Yes, with DNS, connection, TLS and response phases | No | No |
+
+Resource Timing gives finer timing than this package and needs no service worker or install. Choose it when timing detail matters more than headers. For cross-origin requests it reports most phases only when the response sends a `Timing-Allow-Origin` header. Choose OpenTelemetry when you want traces sent to a tracing backend. This package is the better fit when you need response headers for every request and a single subscription API.
+
+## FAQ
+
+### How do I monitor all network requests in a web app?
+
+Register a service worker that handles `fetch` events and forward what it sees to the page. This package does that. Create a `PerformanceMonitor` with the URL of `worker.js` and call `subscribe`. You receive one entry for each request the service worker intercepts, within the worker's scope.
+
+### How do I read the response headers of every fetch request?
+
+Subscribe and read `entry.responseHeaders`.
+
+```typescript
+monitor.subscribe((entry) => {
+  console.log(entry.name, entry.responseHeaders['cache-control']);
+});
 ```
 
-### 3. Manual Setup
+Header names are lowercase. Cross-origin responses expose only the headers the server allows with `Access-Control-Expose-Headers`.
 
-If you're not using a build tool, ensure your web server is configured to serve the worker file from the public directory.
+### How do I measure fetch request duration in JavaScript?
 
-## Browser Support
+For one call, subtract `performance.now()` values around it. For every request, subscribe to this package and read `entry.duration`.
 
-- Chrome 60+
-- Firefox 54+
-- Safari 11.1+
-- Edge 79+
+```typescript
+const start = performance.now();
+const response = await fetch('/api/items');
+console.log('time to response headers', performance.now() - start);
+```
+
+`entry.duration` is also time to response headers, not time to the end of the body.
+
+### Does it measure Core Web Vitals?
+
+No. It does not report LCP, INP, CLS, FCP or TTFB. Use [`web-vitals`](https://www.npmjs.com/package/web-vitals) for those.
+
+### Does it work without a service worker?
+
+No. The service worker is the only source of its data. It does nothing in browsers without Service Worker support, and the worker only registers on pages served over HTTPS or on `localhost`.
+
+### Does it capture requests on the first page load?
+
+Not all of them. The worker takes control of the open page when it activates, by calling `clients.claim()`. Requests the page made before that point are not seen, and the page is fully monitored from the next load on. The Resource Timing API with `buffered: true` can report requests made before your script ran.
+
+### How do I set it up with Vite, webpack and Next.js?
+
+Copy `worker.js` so that your site serves it at the URL you pass as `workerUrl`. See [Setup by build tool](#setup-by-build-tool) for each tool.
+
+### How is it different from the Resource Timing API?
+
+Resource Timing is built into the browser and gives finer timing, but it does not give response headers. This package gives response headers and one subscription API, with coarse timing. The Resource Timing version looks like this:
+
+```typescript
+new PerformanceObserver((list) => {
+  for (const entry of list.getEntries()) console.log(entry.name, entry.duration);
+}).observe({ type: 'resource', buffered: true });
+```
+
+## Browser support
+
+Browsers with Service Worker support. Pages must be served over HTTPS or from `localhost`. The service worker only sees requests after it controls the page, so the first load is not monitored until `clients.claim()` runs. CI runs the unit tests on Node 22 and 24 with jsdom and does not test in real browsers.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing
 
