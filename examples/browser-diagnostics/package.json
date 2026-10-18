@@ -1,0 +1,33 @@
+{
+  "name": "perf-observer-browser-diagnostics",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "perf-observer-diagnose": "cli.mjs"
+  },
+  "exports": "./diagnose.mjs",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "verify": "node setup.mjs",
+    "verify:browser": "node verify.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.62.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "perf-observer-js": "file:perf-observer-js.tgz"
+  },
+  "files": [
+    "cli.mjs",
+    "diagnose.mjs",
+    "report.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}
