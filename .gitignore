@@ -1,2 +1,7 @@
 node_modules
 /coverage
+
+*.tgz
+examples/network-recipes/public/
+
+examples/network-recipes/dist/

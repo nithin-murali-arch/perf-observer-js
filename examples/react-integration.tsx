@@ -2,28 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { PerformanceMonitor } from 'perf-observer-js';
 import type { PerformanceEntryWithHeaders } from 'perf-observer-js';
 
-// Custom hook for performance monitoring
 function usePerformanceMonitor() {
   const [entries, setEntries] = useState<PerformanceEntryWithHeaders[]>([]);
   const [monitor, setMonitor] = useState<PerformanceMonitor | null>(null);
 
   useEffect(() => {
-    // Create monitor instance
     const performanceMonitor = new PerformanceMonitor({
-      transform: (entry) => {
-        // Add any custom transformations here
-        return entry;
-      }
+      workerUrl: '/worker.js',
     });
 
-    // Subscribe to entries
     const subscription = performanceMonitor.subscribe((entry) => {
       setEntries(prev => [...prev, entry]);
     });
 
     setMonitor(performanceMonitor);
 
-    // Cleanup
     return () => {
       subscription.unsubscribe();
       performanceMonitor.disconnect();
@@ -33,7 +26,6 @@ function usePerformanceMonitor() {
   return { entries, monitor };
 }
 
-// Performance data visualization component
 const PerformanceData: React.FC = () => {
   const { entries } = usePerformanceMonitor();
 
@@ -46,14 +38,7 @@ const PerformanceData: React.FC = () => {
             <h3>{entry.name}</h3>
             <div className="metrics">
               <div>Duration: {entry.duration}ms</div>
-              {entry.timing && (
-                <>
-                  <div>DNS Lookup: {entry.timing.domainLookupEnd - entry.timing.domainLookupStart}ms</div>
-                  <div>TCP Connection: {entry.timing.connectEnd - entry.timing.connectStart}ms</div>
-                  <div>Request Time: {entry.timing.responseStart - entry.timing.requestStart}ms</div>
-                  <div>Response Time: {entry.timing.responseEnd - entry.timing.responseStart}ms</div>
-                </>
-              )}
+              <div>Status: {entry.status}</div>
             </div>
             <div className="headers">
               <h4>Response Headers:</h4>
@@ -66,7 +51,6 @@ const PerformanceData: React.FC = () => {
   );
 };
 
-// Example usage in a React component
 const App: React.FC = () => {
   return (
     <div className="app">
@@ -76,4 +60,4 @@ const App: React.FC = () => {
   );
 };
 
-export default App; 
+export default App;

@@ -1,0 +1,5 @@
+{
+  "name": "perf-slow-request-overlay",
+  "private": true,
+  "scripts": { "dev": "npm --prefix ../network-recipes run dev", "build": "npm --prefix ../network-recipes run build" }
+}

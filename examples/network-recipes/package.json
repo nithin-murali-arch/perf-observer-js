@@ -1,0 +1,23 @@
+{
+  "name": "perf-network-recipes",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "verify": "node verify.mjs"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.200.0",
+    "@opentelemetry/sdk-trace-web": "^2.0.0",
+    "perf-observer-js": "file:perf-observer-js.tgz"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "playwright": "^1.56.0",
+    "react": "^19.0.0",
+    "typescript": "^5.3.3",
+    "vite": "^6.4.1"
+  }
+}

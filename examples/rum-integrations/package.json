@@ -1,0 +1,5 @@
+{
+  "name": "perf-rum-integrations",
+  "private": true,
+  "scripts": { "build": "npm --prefix ../network-recipes run build", "verify": "npm --prefix ../network-recipes run verify" }
+}
