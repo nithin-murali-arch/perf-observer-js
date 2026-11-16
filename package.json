@@ -81,5 +81,9 @@
     "testEnvironmentOptions": {
       "url": "http://localhost"
     }
+  },
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/nithin-murali-arch"
   }
 }

@@ -6,6 +6,7 @@
 [![license](https://img.shields.io/npm/l/perf-observer-js)](https://github.com/nithin-murali-arch/perf-observer-js/blob/main/LICENSE)
 [![types](https://img.shields.io/npm/types/perf-observer-js)](https://www.npmjs.com/package/perf-observer-js)
 [![minified + gzip size](https://img.shields.io/bundlejs/size/perf-observer-js)](https://bundlejs.com/?q=perf-observer-js)
+[![Sponsor](https://img.shields.io/badge/sponsor-GitHub%20Sponsors-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/nithin-murali-arch)
 
 `perf-observer-js` is a service worker based monitor for network requests in web apps. It reports the URL, method, duration, status, and response headers of each request the service worker intercepts through one `subscribe` callback. It does not use `PerformanceObserver` and it does not measure Web Vitals (LCP, INP, CLS, FCP, TTFB). Use [`web-vitals`](https://www.npmjs.com/package/web-vitals) for those.
 
@@ -534,6 +535,10 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## Sponsor
+
+If this package saves you time, you can support its maintenance through [GitHub Sponsors](https://github.com/sponsors/nithin-murali-arch).
 
 ## License
 
